@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard de Referências Bibliográficas</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h2 {
+      color: #333;
+    }
+    input[type="file"] {
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      height: 1.5em;
+    }
+    th {
+      cursor: pointer;
+      background-color: #f4f4f4;
+      user-select: none;
+    }
+    th .sort-indicator {
+      margin-left: 5px;
+    }
+    .hidden {
+      display: none;
+    }
+    .resizable {
+      resize: horizontal;
+      overflow: auto;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h2>Dashboard de Referências Bibliográficas</h2>
+  <input type="file" id="csvFile" accept=".csv" />
+  <div id="summary"></div>
+  <div id="confirm"></div>
+  <div id="tableContainer" class="hidden"></div>
+  <div id="chartControls" class="hidden">
+    <p>Escolha uma coluna categórica para exibir um gráfico:</p>
+    <select id="categorySelect"></select>
+    <canvas id="barChart" width="600" height="400"></canvas>
+  </div>
+
+  <script>
+    let csvData = [];
+    let headers = [];
+    let sortDirection = {};
+
+    document.getElementById('csvFile').addEventListener('change', function (event) {
+      const file = event.target.files[0];
+      if (file) {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            csvData = results.data;
+            headers = results.meta.fields;
+            analyzeAndSummarize();
+          }
+        });
+      }
+    });
+
+    function analyzeAndSummarize() {
+      const numRows = csvData.length;
+      const colTypes = headers.map(header => analyzeColumn(csvData.map(row => row[header])));
+      const dispensableCols = headers.filter((_, i) => colTypes[i] === 'inválida');
+
+      let summaryHtml = `<p><strong>Títulos das colunas:</strong> ${headers.join(', ')}</p>`;
+      summaryHtml += `<p><strong>Número de linhas:</strong> ${numRows}</p>`;
+      summaryHtml += `<p><strong>Colunas numéricas:</strong> ${headers.filter((_, i) => colTypes[i] === 'numérica').join(', ')}</p>`;
+      summaryHtml += `<p><strong>Colunas categóricas:</strong> ${headers.filter((_, i) => colTypes[i] === 'categórica').join(', ')}</p>`;
+      summaryHtml += `<p><strong>Colunas descartáveis:</strong> ${dispensableCols.join(', ') || 'nenhuma'}</p>`;
+
+      document.getElementById('summary').innerHTML = summaryHtml;
+      document.getElementById('confirm').innerHTML = '<p>Deseja exibir o dashboard com os dados?</p>' +
+        '<button onclick="showDashboard()">Sim</button> ' +
+        '<button onclick="alert(\'Ok, dados não serão exibidos.\')">Não</button>';
+    }
+
+    function analyzeColumn(values) {
+      if (values.every(v => !v || v.trim() === '')) return 'inválida';
+      const nonEmpty = values.filter(v => v && v.trim() !== '');
+      const numericCount = nonEmpty.filter(v => !isNaN(parseFloat(v))).length;
+      const uniqueValues = new Set(nonEmpty);
+
+      if (numericCount === nonEmpty.length) return 'numérica';
+      if (uniqueValues.size < nonEmpty.length / 2) return 'categórica';
+      return 'inválida';
+    }
+
+    function showDashboard() {
+      const container = document.getElementById('tableContainer');
+      container.classList.remove('hidden');
+      const table = document.createElement('table');
+
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+
+      headers.forEach((header, colIndex) => {
+        const th = document.createElement('th');
+        th.innerHTML = `${header} <span class="sort-indicator">&#x21C5;</span>`;
+        th.addEventListener('click', () => sortTable(colIndex));
+        headerRow.appendChild(th);
+      });
+
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      const maxRows = Math.min(csvData.length, 100);
+
+      for (let i = 0; i < maxRows; i++) {
+        const row = csvData[i];
+        const tr = document.createElement('tr');
+        headers.forEach(header => {
+          const td = document.createElement('td');
+          td.textContent = row[header];
+          td.title = row[header];
+          td.classList.add('resizable');
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+      showCategoryChartOptions();
+    }
+
+    function sortTable(colIndex) {
+      const key = headers[colIndex];
+      const direction = sortDirection[key] === 'asc' ? 'desc' : 'asc';
+      sortDirection[key] = direction;
+
+      csvData.sort((a, b) => {
+        const valA = a[key] || '';
+        const valB = b[key] || '';
+        return direction === 'asc'
+          ? valA.localeCompare(valB, undefined, { numeric: true })
+          : valB.localeCompare(valA, undefined, { numeric: true });
+      });
+
+      showDashboard();
+    }
+
+    function showCategoryChartOptions() {
+      const categoricalCols = headers.filter(header => {
+        const values = csvData.map(row => row[header]);
+        return analyzeColumn(values) === 'categórica';
+      });
+
+      if (categoricalCols.length === 0) return;
+
+      const select = document.getElementById('categorySelect');
+      select.innerHTML = '';
+      categoricalCols.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col;
+        option.textContent = col;
+        select.appendChild(option);
+      });
+
+      document.getElementById('chartControls').classList.remove('hidden');
+      select.addEventListener('change', () => renderBarChart(select.value));
+      renderBarChart(select.value);
+    }
+
+    function renderBarChart(column) {
+      const counts = {};
+      csvData.forEach(row => {
+        const val = row[column] || '(vazio)';
+        counts[val] = (counts[val] || 0) + 1;
+      });
+
+      const labels = Object.keys(counts);
+      const data = Object.values(counts);
+
+      if (window.barChartInstance) {
+        window.barChartInstance.destroy();
+      }
+
+      const ctx = document.getElementById('barChart').getContext('2d');
+      window.barChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: `Distribuição de '${column}'`,
+            data: data,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            x: { ticks: { maxRotation: 90, minRotation: 45 } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
