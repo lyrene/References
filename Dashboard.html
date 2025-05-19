@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard de Referências Bibliográficas</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { color: #333; }
+    input[type="file"] { margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
+    th, td {
+      border: 1px solid #ccc; padding: 8px; text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    th { cursor: pointer; background-color: #f4f4f4; user-select: none; }
+    th .sort-indicator { margin-left: 5px; }
+    .hidden { display: none; }
+    .resizable { resize: horizontal; overflow: auto; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h2>Dashboard de Referências Bibliográficas</h2>
+  <input type="file" id="csvFile" accept=".csv" />
+  <div id="summary"></div>
+  <div id="confirm"></div>
+  <div id="tableContainer" class="hidden"></div>
+  <div id="chartControls" class="hidden">
+    <p>Escolha uma coluna categórica para exibir um gráfico:</p>
+    <select id="categorySelect"></select>
+    <canvas id="barChart" width="600" height="400"></canvas>
+  </div>
+
+  <div style="margin-top:30px">
+    <h3>Extração de termos com dicionário</h3>
+    <label for="dictColumn">Escolha a coluna para buscar os termos:</label>
+    <select id="dictColumn"></select>
+    <button onclick="extractWithDictionary()">Extrair termos encontrados</button>
+    <button onclick="downloadUpdatedCSV()">Download CSV atualizado</button>
+  </div>
+
+  <script>
+    let csvData = [];
+    let headers = [];
+    let sortDirection = {};
+
+    const termDictionary = new Set([
+  "'good-enough' requirements", "(semi-)automatic gui generation", "0", "1 engineering ethics o", "1 requirements/specifications", "2", "3 moral implications", "3c",
+  "4 computers and society o", "5", "9", "@l-is", "aadl", "aal", "abbreviation data-set", "abbreviation-expansion pair detection",
+  "abstract state machines (asm)", "abstraction", "abstraction finding", "abstraction identification", "abstraction layers", "abstraction levels", "abstractions", "abstractive summarization",
+  "academias de musculação", "acceptance", "acceptance requirements", "acceptance test", "acceptance tests", "access control", "access right", "accessibility",
+  "accessibility education", "accessibility requirements", "accessible", "accountability", "accountability (including auditability)", "accountable design", "accreditation", "accuracy",
+  "acessibilidade", "acesso estruturado", "ach", "achiveability analysis", "act matrix", "action design research", "action languages", "action properties",
+  "action research", "active databases", "active learning", "active video watching", "activities", "activity", "activity card compiler output", "activity checklist",
+  "activity diagrams", "activity graphs", "activity theory", "actor diagram", "actor-role modelling", "actors", "actual usability", "actuators",
+  "ad-hoc modeling", "adaptation", "adaptation plan", "adaptive privacy", "adaptive security requirements", "adaptive software", "adaptive systems", "adaptive user interfaces",
+  "addictive technology", "adequacy", "adjectival ambiguity", "adoption model", "adoption of technology", "adquisición de conocimiento", "advanced dependencies", "advanced metering infrastructure (ami) security",
+  "advanced persistent threat", "advanced persistent threat (apt)", "adversarial examples", "adversary models", "adverse drug reactions", "advisors", "aeco", "aeronautics",
+  "aerospace", "aerospace engineering", "aerospace industry", "aerospace safety", "aerospace simulation", "aerospace systems", "affect", "affect-laden requirements",
+  "affective computing", "affective computing requirements engineering", "affective pedagogy", "affective trust", "affects", "ageing", "ageing users", "agent",
+  "agent-oriented", "agent-oriented development", "agent-oriented goal models", "agent-oriented requirements engineering", "agent-oriented software engineering", "agentes", "agents", "aggregates",
+  "agile", "agile agile development", "agile and lean approaches", "agile approach", "agile business process", "agile customer", "agile development", "agile documentation",
+  "agile management and development", "agile methodologies", "agile methodology", "agile methods", "agile modeling method engineering", "agile practices", "agile process", "agile processes",
+  "agile product line engineering", "agile project development", "agile project management", "agile projects", "agile re", "agile requirement modeling", "agile requirements", "agile requirements engineer",
+  "agile requirements engineering", "agile security", "agile software development", "agile software engineering", "agile software process", "agile software requirements", "agile system development", "agile teams",
+  "agility", "aging", "aging-in-place", "agriculture", "ahp", "ai", "ai ethics", "ai governance",
+  "ai in sdlc", "ai-assisted re", "ai-based systems", "ai4re", "aic", "aim", "air safety", "air traffic control",
+  "air traffic management domain", "aircraft", "airdoc", "aire-workshop-on-artificial-intelligence-and-requirements-engineering", "airports", "al", "al governance", "algebra of behavior",
+  "algebraic programming", "algorithm bias", "algorithm design and analysis", "alignment", "alineación de dominios", "alinhamento de equipes", "alinhamento de grupos de trabalho", "allocation of roles",
+  "alloy", "alternative and augmentative communication", "alternative selection", "ambient assisted living", "ambient assisted living technology", "ambiente virtual de aprendizagem móvel", "ambientes de vida assistida", "ambientes organizacionais",
+  "ambiguity", "ambiguity cue", "ambiguity detection", "ambiguity finding", "ambiguity identification", "ambiguity in spoken language", "ambigüedad de los requerimientos", "amenazas",
+  "analista de requisitos", "analogic reasoning", "analysing sustainability", "analysis", "analysis goals", "analysis model", "analysis of competing hypotheses", "analysis pattern",
+  "analysis-revision", "analysts", "analysts’ effort", "analytic hierarchical process (ahp)", "analytic hierarchy process", "analytic hierarchy process (ahp)", "analytical attack graph", "analytical models",
+  "analytics", "anaphora ambiguity", "anaphoric ambiguity", "and security", "and software engineering (se)", "and transparency", "android", "android applications",
+  "android permission", "android phone application", "animal tracking", "animal-centered technology", "animal-computer interaction", "animal–computer interaction", "animation", "animation of specifications",
+  "annotation", "annotation schema", "anomaly detection", "anomaly handling", "anomaly-handling", "anonymisation", "answer set", "answer set programming",
+  "antecedent preference heuristics", "anti-patterns", "anti-requirements", "anxiety disorders", "an´alisis de requisitos", "análise", "análise de contexto", "análise de domínio",
+  "análise de qualidade", "análise de requisitos", "análisis de calidad", "análisis de requerimientos", "análisis de requisitos", "análisis orientado a objetos", "aourn", "aplicaciones web",
+  "aplicações móveis", "app analytics", "app features extraction", "app review analysis", "app reviews", "app store", "app store analysis", "app store analytics",
+  "app store mining", "app store-inspired elicitation", "app stores mining", "app-store-mining", "applicability", "application domain", "application software", "applied cognitive task analysis",
+  "applied modal logic", "appraisal", "approach and recommendations for creating videos", "approaches", "appropriate technology", "apps", "apps reviews", "aprendizagem",
+  "apriori algorithm", "aquisição de conhecimento", "aquisição de tic", "aqusa", "arboricide", "architectural decision", "architectural design", "architectural design decisions",
+  "architectural evolution", "architectural properties", "architectural prototyping", "architecturally significant functional requirements", "architecturally significant functional requirements (asfrs)", "architecturally significant requirements", "architecturally significant requirements (arss)", "architecture",
+  "architecture design", "architecture evaluation", "architecture framework", "architecture modelling", "architecture reconfiguration", "architecture refinement", "arduino", "area measurement",
+  "arguesecure", "argument schemes", "argumentation", "argumentation schemes", "arguments", "arpanet", "arquitetura orientada a serviços (soa)", "art",
+  "art provenance", "artefact", "artefact orientation", "artefact relationship", "artifact characteristics", "artifact linking", "artifact model", "artifact quality",
+  "artifacts", "artificial intelligence", "artificial intelligence (ai)", "artificial intelligence and ethics", "artificial neural networks", "artificial-intelligence", "as-surance deficits", "aspect oriented requirement engineering",
+  "aspect-mining", "aspect-oriented framework", "aspect-oriented requirements engineering", "aspect-oriented software development", "aspect-oriented use case maps", "aspectoriented development", "aspectos culturais", "aspectos sociais",
+  "aspects", "aspiration", "assembly", "assembly language", "assessment", "asset identification privacy", "asset management", "assistance",
+  "assistive technologies", "assistive technology", "associations", "assurance", "assurance case", "assurance case development", "assurance cases", "asynchronous",
+  "atividade", "atl", "atributos de qualidade", "attack graph", "attack path", "attack scenario", "attack surface", "attention",
+  "attention mechanism", "attention model", "attribute weighing", "audio to text transcription", "auditing", "audits", "augmented reality enhanced process", "australia",
+  "auteur theory", "authentication", "authoring", "authoring guidelines", "authorisation requirement", "authority requirements", "authorization", "automata",
+  "automated acceptance tests", "automated analysis", "automated conflicts identification tool", "automated design generation", "automated driving", "automated environment", "automated generation model", "automated labeling",
+  "automated methods", "automated planning", "automated production systems", "automated re", "automated reasoning", "automated reasoning techniques", "automated reasoning tool", "automated require ments tracing",
+  "automated requirements based test generation", "automated requirements checking", "automated requirements generation", "automated requirements modeling", "automated requirements-based test generation", "automated software engineering", "automated software traceability", "automated test case generation",
+  "automated test generation", "automated tool", "automated traceability", "automated tracing", "automated usability evaluation", "automated vehicles", "automatic approach", "automatic classification",
+  "automatic classification requirements", "automatic control", "automatic gui tailoring", "automatic labeling", "automatic layout", "automatic test case derivation", "automatic test generation", "automatic testing",
+  "automatic tests", "automatic text completion", "automatic visualization", "automation", "automation systems", "automotive", "automotive applications", "automotive development",
+  "automotive engineering", "automotive requirements engineering", "automotive software", "automotive spice", "automotive spicetm", "automotive systems", "automotive systems engineering", "automotive testing",
+  "autonnmous driving systems", "autonomic systems", "autonomous agents", "autonomous driving", "autonomous driving system", "autonomous driving systems", "autonomous robotic systems", "autonomous subdivisions",
+  "autonomous systems", "autonomous systems explainable ai explainable autonomy software architecture rational agents", "autonomous vehicle", "autonomous vehicles", "autonomy", "autonomy requirements engineering (are)", "availability", "avaliação",
+  "avaliação de riscos", "aviation", "avionics software", "awareness", "awareness requirements", "awareness training", "azimut framework", "b-method",
+  "b2b", "backlog items", "balanced score card", "banco de dados", "banking", "barriers", "basic protocols", "batch addition",
+  "bayesian belief networks", "bayesian inference", "bayesian methods", "bayesian networks", "bayesian surprise", "bdd", "bdi agents", "behavior",
+  "behavior change", "behavior driven development", "behavior requirements validation", "behavior-driven development", "behavioral analysis", "behavioral modeling", "behavioral programming", "behavioral requirements",
+  "behaviour", "behaviour driven development", "behaviour structure", "behaviour-driven development", "behavioural models", "benchmark testing", "benchmarking", "benchmarks",
+  "benefit", "benefits", "bert", "best practices", "beyond plan-driven requirements engineering", "bi-directional traceability", "bi-lstm", "bidirectional programming",
+  "big data", "big data analytics", "big-data", "big-step modelling languages", "bilstm", "bim", "bim adoption barriers", "bim governance",
+  "binary constraints", "bioinstrumentation", "biological-information", "biomedical informatics", "biometrics", "blackboard architecture", "blind and visually impaired", "block diagram",
+  "blockchain", "blockchain technology", "blockhain", "blueprint de serviços", "bmm (business motivation model)", "body of knowledge", "books", "bottom-up",
+  "boundary object", "boundary spanner", "boundedness", "box plot", "bpf", "bpm", "bpm (business process management)", "bpmn",
+  "bpmn extension method", "bpmn extensions", "br", "brain injuries", "brain injury", "brainstorming", "brainstorming domain awareness", "brama",
+  "branching stories", "breach reports", "breakdown", "bridges", "bridging ontologies", "broader impact", "browser", "bug prediction",
+  "building architecture", "building information model", "building information modelling (bim)", "buildings", "built-in assurance", "bunge's ontology", "busiess agility", "business",
+  "business  process  modeling", "business agility", "business alignment", "business analysis", "business analysis lifecycle", "business analyst", "business application", "business communication",
+  "business goal scenario", "business goals", "business goals (bgs)", "business intelligence", "business model canvas", "business model design", "business modeling", "business models",
+  "business patterns", "business policy", "business process", "business process compliance", "business process configuration", "business process improvement", "business process management", "business process management notation (bpmn)",
+  "business process model", "business process model and notation", "business process modeling", "business process modelling", "business process models", "business process monitoring", "business process-based asset identification", "business processes",
+  "business processes requirements", "business requirements engineering", "business rules", "business strategy modelling", "business versus it", "business-ict alignment", "business-it alignment", "business-process-driven requirements engineering",
+  "business/it misalignment", "buyer", "by-product", "c-incami", "cairis", "calidad de la información", "calidad de modelos", "call-for-tender processes",
+  "came tool", "cameras", "candidate link generation", "canvas", "capabilities", "capability", "capability maturity model", "capability modeling",
+  "capability taxonomy", "capture-the-flag", "carbon capture and storage", "card sorting", "case", "case based reasoning", "case frame", "case studies",
+  "case study", "case study research", "case study track", "case tool", "case-based reasoning", "case-based recommender", "case-study", "cash flow",
+  "caso de estudio", "caso de garantia", "caso de garantia de segurança", "caso de segurança", "casos de prueba", "casos de teste", "casos de uso", "catalog",
+  "catalogue", "catalogues", "catálogo", "catálogo de requisitos não-funcionais (rnfs)", "catálogo de transparência de software", "causal analysis", "causal diagrams", "causal logic",
+  "causal loop diagram", "causal models", "causal reasoning", "causality", "causality extraction", "causation", "causes", "cc/pp",
+  "ccm", "ccsl", "center of excellence for software traceability (coest)", "central bank digital currencies", "cenários", "cenários de conflito", "certification", "certificação",
+  "certificação de segurança", "certified explainability", "chain-of-thought", "chal-lenges", "challenges", "change", "change impact", "change impact analysis",
+  "change interdependencies", "change management", "change prioritization", "change request", "change-impact analysis", "changelogs", "changing work", "chaos",
+  "characteristic", "characteristics", "charging stations", "chatbot", "chatbots", "chatbots conversational agents", "chatgpt", "chatgpt-4",
+  "checklist", "chemotherapy planning", "children", "children’s rights", "chronic disease", "chronic disorder", "ciclo de vida", "cidades inteligentes",
+  "citizen science", "civitas", "clarification", "class models", "classification", "classification quality", "classification tree model", "classified requirements",
+  "classifier training", "classroom misfortunes", "client scenarios", "client server tool", "clinical decision making", "clinical decision support systems", "clinical pathways", "clinical trials",
+  "clock constraint specification language", "cloud", "cloud applications", "cloud computing", "cloud computing security", "cloud deployment model", "cloud dimension", "cloud environment",
+  "cloud forensic conceptual model", "cloud forensic constraints", "cloud forensic methodology", "cloud forensic process", "cloud forensics", "cloud migration", "cloud service", "cloud systems",
+  "cloud-based systems", "cluster analysis", "cluster characterization", "clustering", "clustering algorithms", "cmmi", "cnn", "co simulation",
+  "co-design", "co-development", "co-ordination ambiguity", "cobit", "code and component testing", "code coverage", "code generation", "code testability",
+  "cognition", "cognitive complexity", "cognitive effectiveness", "cognitive ergonomics", "cognitive informatics", "cognitive processes", "cognitive psychology", "cognitive requirements",
+  "cognitive schemas", "cognitive style", "cognitive work analysis", "cohort", "coins", "collaboration", "collaboration modeling", "collaboration with stakeholders",
+  "collaboration-modelling", "collaborative", "collaborative  elicitation", "collaborative case study", "collaborative cyber-physical systems", "collaborative design", "collaborative elicitation", "collaborative filtering",
+  "collaborative modeling", "collaborative platform", "collaborative projects", "collaborative requirements elicitation", "collaborative requirements prioritisation", "collaborative requirements prioritization", "collaborative software", "collaborative systems",
+  "collaborative work", "collective sensemaking", "collision avoidance system", "colored petri-net", "colorimetry", "coloured petri nets", "combinatorial interaction testing", "combining ontologies",
+  "command and control systems", "commercial application (ca) development", "commitment", "commitments", "committee-focused requirements engineering", "committees", "common attack pattern enumeration and classification (capec)", "common criteria",
+  "common criteria (cc)", "common criteria framework", "common ground", "common practices", "common weakness enumeration", "common weakness enumeration (cwe)", "communicating sequential processes", "communication",
+  "communication analysis", "communication mistakes", "communication nonviolent", "communication of requirements", "communication patterns", "communication software as a service", "communication structure", "communication switching",
+  "communication system security", "communication system software", "communications technology", "communities of practice", "community of practice", "community-based requirements engineering", "commute time", "companies",
+  "company structure", "company's re process", "comparative law", "comparative study", "comparison", "compartilhamento de conhecimento", "compatibility", "competence",
+  "competencies", "competências", "complete requirement", "completeness", "completeness of requirements specifications (rs)", "completeness validation", "completitud", "completitud de modelos",
+  "complex adaptive systems", "complex adaptive systems theory", "complex embedded systems", "complex federal structures", "complex situation", "complex solution", "complex system", "complex systems",
+  "complex-systems", "complexity", "complexity assessment", "complexity computing", "complexity management", "complexity theory", "compliance", "compliance checking",
+  "compliance management", "component", "component architectures", "component state transition diagrams", "component-based software development (cbsd)", "component-bus-system-property (cbsp) approach", "component: web requirements analysis", "componentes de software",
+  "components library", "components selection", "composite applications", "composition", "compositional", "comprehensibility", "comprehension", "comprehension accuracy",
+  "comprehension speed", "computation movement", "computational mechanisms", "computational support based on requirement patterns", "computação em nuvem", "computer aided software engineering", "computer architecture", "computer bugs",
+  "computer industry", "computer science", "computer security", "computer society", "computer supported cooperative work", "computer viruses", "computer-aided software engineering", "computer-aided support system",
+  "computing with words", "comunicación", "concept categorization", "concept model", "concept of operation", "concepts of operations document", "conceptual analysis of modelling", "conceptual design",
+  "conceptual mental model", "conceptual model", "conceptual model visualization", "conceptual modeling", "conceptual modelling", "conceptual models", "conceptual schema analysis", "conceptual schema testing",
+  "conceptual schema validation", "concern", "concern-driven development", "concern-orientation", "concern-oriented", "concern-oriented reuse", "concerns", "concrete",
+  "concurrency", "concurrent engineering", "concurrent software engineering", "condition monitoring", "conditions", "conference interaction", "conference management", "confiança",
+  "confidence measure", "confidentiality requirements", "configurable system", "configuration", "configuração de processo de negócio", "configuring products", "conflict", "conflict analysis",
+  "conflict detection", "conflict identification", "conflict management", "conflict resolution", "conflicting requirements", "conflicts", "conformance testing", "conformidade",
+  "conformidade legal", "conjoint analysis", "connectors", "conops", "consent", "consistencies of requirements", "consistency", "consistency analysis",
+  "consistency checking", "consistency verification", "constrained goal models", "constrained natural language", "constraint logic programming", "constraint programming", "constraint satisfaction", "constraint theory",
+  "constraints", "construction", "construction industry", "consulting self-service", "consumer", "consumer electronics", "consumer value", "contact-tracing apps",
+  "contagem de pontos de função", "content analysis", "content management", "content model", "content requirements", "context", "context accumulation", "context adaptive systems",
+  "context analysis", "context annotations", "context awareness", "context detection", "context engineering", "context information", "context meta-modeling", "context modeling",
+  "context models", "context sensitive", "context-aware", "context-aware process management", "context-awareness", "context-sensitive system", "context-sensitive systems", "contexto",
+  "contextual information", "contextual inquiry and design", "contextual integrity", "contextual knowledge", "contextual requirements", "contextualization", "contingency requirements", "contingency theory",
+  "continual requirements determination", "continuous delivery", "continuous deployment", "continuous integration", "continuous learning", "continuous requirements engineering", "continuous software engineering", "continuous update",
+  "contract", "contract template", "contracting", "contracts", "contractual compliance requirements", "control loops", "control selection", "control system synthesis",
+  "control systems", "control theory", "controle de versões", "controlled experiment", "controlled experiments", "controlled language", "controlled natural language", "controlled study",
+  "controlled-experiment", "conventions", "conversational agent", "conversational ai", "conversational assistants", "conversational integrated map", "conversational re", "conversations",
+  "conviviality", "convolutional neural networks", "cookies", "coolants", "cooperation", "cooperative requirements engineering", "cooperative work", "coordination",
+  "coramod", "corporate policy", "corporate social responsibility", "corpus linguistics", "correctness", "correctness criteria", "correlation", "correlation analysis",
+  "cost benefit", "cost estimation", "cost function", "cost of reparation", "cost-benefit of requirements engineering", "cost-effective elicitation model", "cost-value based requirements selection", "cost/benefit",
+  "costing", "costs", "cots", "cots acquisition", "cots components", "cots development process", "cots selection", "cots versus requirements mismatch",
+  "cots vs", "cots-based development", "councils", "counting circuits", "countries", "coupling", "course project", "courteous logic",
+  "coverage", "covid-19", "cps", "creative computing", "creative methodologies", "creative requirements", "creative requirements elicitation", "creativity",
+  "creativity enhancement techniques", "creativity in re", "creativity process", "creativity technique", "criatividade combinacional", "criativity", "crime records management", "crime requirements",
+  "crime script", "criminal profiling", "crisis management", "crisis management systems", "criterion", "critical evaluation", "critical infrastructure protection", "critical systems",
+  "critical theory", "critérios de aceitação", "crm", "cross domain scope of requirements", "cross references", "cross-disciplinary research", "cross-discipline", "cross-domain approach",
+  "cross-functional teams", "cross-organizational coordination", "cross-references regulatory compliance", "crosscutting concern identification", "crosscutting concerns", "crosscutting concerns approach", "crosscutting concerns identification", "crowd",
+  "crowd based requirements engineering", "crowd data", "crowd re", "crowd requirements engineering", "crowd sourcing", "crowd-based re", "crowd-based requirements engineering", "crowd-sourcing",
+  "crowdre", "crowdsourced text mining", "crowdsourcing", "crowdsourcing software development", "crud", "cscw", "cscw (computer-supported cooperative work)", "csfi",
+  "csrml", "cultura organizacional", "cultural appropriateness", "cultural aspects", "cultural conventions", "cultural differences", "cultural influences", "cultural informatics",
+  "culture", "cuneiform", "current practice", "current use", "curriculum", "curriculum development", "customer", "customer experience requirements",
+  "customer intent", "customer involvement", "customer journey map (cjm)", "customer liaison", "customer relationship management", "customer satisfaction", "customer support", "customer support ticket",
+  "customer value", "customers' satisfaction", "customisation", "cyber crimes", "cyber digital twin", "cyber physical process", "cyber physical system", "cyber physical systems",
+  "cyber security", "cyber security awareness", "cyber-physical system", "cyber-physical systems", "cyber-physical systems (cps)", "cyberattacks", "cyberjustice", "cybersecurity",
+  "d", "danish smes", "dashboard", "data analysis", "data analytics", "data analytics platform", "data challenges", "data collection",
+  "data communication", "data driven requirements engineering", "data ecosystems", "data engineering", "data flow analysis", "data flow diagrams", "data flows", "data governance",
+  "data interactions", "data labeling", "data labeling systems", "data lake", "data licenses", "data mining", "data modeling", "data modelling",
+  "data models", "data movement", "data preprocessing", "data privacy", "data processing agreement (dpa)", "data processing agreements", "data protection", "data protection legislation",
+  "data purpose", "data quality", "data requirements", "data reusability", "data science", "data security", "data set", "data uncertainty",
+  "data use agreements", "data visualization", "data warehouse", "data warehouse requirements", "data warehouses", "data wrangling", "data-analytics", "data-centric ai",
+  "data-driven", "data-driven engineering", "data-driven requirements", "data-driven requirements elicitation", "data-driven requirements engineering", "data-driven software engineering", "data-driven-requirements-engineering", "data-science",
+  "databases", "datagpt", "dataset", "datasets", "datasets quality", "dc generators", "dcp", "debate",
+  "debugging", "decentralized systems", "decision", "decision analysis", "decision documentation", "decision knowledge", "decision making", "decision model",
+  "decision practice", "decision situation", "decision support", "decision support course", "decision support instruments", "decision support tool", "decision tables", "decision trees",
+  "decision-makers", "decision-making", "decision-support", "decision–information", "declarative modelling", "deep language models", "deep learning", "deep neural networks",
+  "deep-learning", "defeasible logic", "defeaters", "defect density", "defect taxonomies", "defense industry", "deferred system's design", "definition",
+  "definitions", "definitions of pragmatic and hedonic qualities", "delay", "delayed decisions", "delphi technique", "delta analysis", "demand-side response", "deontic logic",
+  "deontic operators", "dependability", "dependence matrix", "dependencies", "dependencies between requirements", "dependency", "dependency analysis", "dependency embeddings",
+  "dependency extraction", "dependency management", "dependency matrix", "dependency tree visualisation", "dependent variables", "deregulation", "derived requirement", "desarrollo global de software",
+  "description logic", "descriptive representation", "descrição", "desenvolvimento de software", "desenvolvimento dirigido por modelos", "desenvolvimento distribuído de software", "design", "design and analysis of simulation experiments (dase)",
+  "design decisions", "design domains", "design elements", "design engineering", "design evolution", "design explanation", "design fiction", "design for excellence (dfx)",
+  "design goal", "design languages", "design methodology", "design models", "design patterns", "design principles", "design rationale", "design rationales",
+  "design representations", "design requirements", "design research", "design science", "design science research", "design science research methodology", "design sciences research", "design sprint",
+  "design steps", "design structure matrix", "design thinking", "design thinking (dt)", "design time", "design-operation", "desing thinking", "detection and resolution",
+  "developer", "developer commits", "developer perception", "developers", "developing countries", "development", "development lifecycle", "development path",
+  "development pattern", "development patterns", "development process", "development team", "development-process", "deviations", "device automata", "device knowledge-guided",
+  "devops", "diabetes", "diagram", "diagram layout", "dicot", "dictionaries", "diffusion models", "diffusion of innovation",
+  "digital addiction", "digital applications", "digital design", "digital diploma", "digital ecosystem", "digital education ecosystem", "digital ergonomics", "digital farming",
+  "digital forensic", "digital forensics", "digital government", "digital health", "digital innovation", "digital inquiries", "digital libraries", "digital motivation",
+  "digital privacy", "digital process twin (dpt)", "digital security", "digital shadow", "digital solutions", "digital transformation", "digital trust management", "digital work environment",
+  "digital workshop", "digitalization", "dinâmica de sistemas", "direct feedback", "disagreement", "disambiguation", "discourse acts", "discrete controller synthesis",
+  "discrete event simulation", "discussion forums", "discussions", "disillusioned", "distance", "distance education", "distances", "distinction",
+  "distortion", "distributed agile patterns", "distributed cognition", "distributed computing", "distributed re", "distributed requirements engineering", "distributed requirements integrity", "distributed software development",
+  "distributed teams", "distributed teamwork", "distribution", "diverse users", "diversity", "dna nan-otechnology", "do-178c", "document analysis",
+  "document engineering", "documentation", "documentation evaluation", "documentation quality", "documentação", "documentação de requisitos", "documentação ágil", "documento de requerimientos",
+  "documentos de requisitos", "documentos isomórficos", "documents hierarchies", "domain", "domain adaptation", "domain analysis", "domain awareness", "domain characteristics",
+  "domain engineering", "domain expertise", "domain ignorance", "domain knowledge", "domain language", "domain model", "domain modeling", "domain models",
+  "domain ontologies", "domain ontology", "domain practice", "domain specific ambiguity", "domain specific language", "domain specific languages", "domain specified ontology", "domain understanding",
+  "domain-independent", "domain-specific language", "domain-specific language models", "domain-specific languages", "domain-specific modelling languages", "domain-specific requirements engineering", "domain-specific software language", "domain-specific tax-onomy",
+  "domain-specific taxonomy", "domain-specific terminology", "domainengineering", "domínio aplicação", "doors", "double diamond", "driver assistive technology", "driving automation systems",
+  "dsl", "dsl tools", "dual track", "dung abstract framework", "duplicate detection", "duplicate identification", "dw", "dynamic access control",
+  "dynamic information extraction", "dynamic link generation", "dynamic logic", "dynamic questionnaire", "dynamic safety assurance", "dynamic service provisioning", "dynamic software product lines", "dynamic variability",
+  "dynamically adaptive systems", "dívida técnica", "e <sup>3</sup>alignment", "e-accessibility", "e-collaboration systems", "e-government", "e-health", "e-learning",
+  "e-mental health", "e-voting", "e4j", "ea models", "ea principles", "early and later requirements", "early aspect", "early aspects",
+  "early failure prediction", "early requirements", "early requirements engineering", "earned business value", "ears", "earth", "easywinwin", "ebnf",
+  "eccoia", "eccola", "eclipse", "eclipse modelling framework", "economics", "ecossistemas de software", "ecossistemas digitais", "ecosystem-requirements",
+  "eddy", "education", "education and training", "educational approaches", "educational games", "educational institutions", "educação e treinamento", "eduction",
+  "eer", "ef-fects", "effective requirements reuse", "efficiency", "effort model", "elaboration techniques", "elderly users", "elderly-friendly products",
+  "elearning", "electric vehicle", "electrical equipment industry", "electricity supply industry", "electronic banking", "electronic commerce", "electronic evidence", "electronic government",
+  "electronic learning", "electronic mail", "electronic procurement", "electronic services quality", "electronic voting", "electronic voting system", "elementary pragmatic model", "elements",
+  "elicitacao de requisitos", "elicitación", "elicitación de requerimientos", "elicitation", "elicitation and validation", "elicitation challenges", "elicitation interview script generation", "elicitation method",
+  "elicitation methods", "elicitation support", "elicitation techniques", "elicitação", "elicitação de requisitos", "elicitiation", "embedded automotive software", "embedded real-time system",
+  "embedded software", "embedded system", "embedded systems", "emergence", "emergency response", "emergent behavior", "emergent behaviour", "emergent knowledge process",
+  "emergent systems", "emerging communication", "emerging theory", "emotion", "emotion led", "emotional and cultural intelligence requirements", "emotional attachment framework", "emotional goal capturing",
+  "emotional goals", "emotional requirements", "emotions", "emoções", "empathy", "empathy-driven development", "empirical", "empirical evaluation",
+  "empirical evidence", "empirical interview study", "empirical investigation", "empirical investiigation", "empirical methods", "empirical research", "empirical research design", "empirical research method",
+  "empirical research methods", "empirical security knowledge", "empirical software engineering", "empirical studies", "empirical study", "empirical validation", "empirical work", "empirical-research",
+  "employment", "empowerment", "empowerment human factors", "emulation", "enaction", "encapsulation", "end user", "end user communication",
+  "end-user development", "end-user feedback", "end-user involvement", "end-user service composition", "endsi", "energy consumption model", "energy service", "energy transition",
+  "engajamento", "engenharia de ontologias", "engenharia de requisito", "engenharia de requisitos", "engenharia de requisitos orientada a objetivos", "engenharia de requisitos orientada a objetivos (gore)", "engenharia de software", "engenharia de software experimental",
+  "engenharia reversa", "engenharia semiótica", "engineering", "engineering management", "engineering paradigm", "engineering requirements", "engineering-legal coordination", "engineers' education",
+  "enrolment process", "ensino", "ensino de requisitos", "ensuring compliance", "enterprise", "enterprise agility", "enterprise architecture", "enterprise architecture (ea)",
+  "enterprise cloud bus system", "enterprise design", "enterprise engineering", "enterprise information systems", "enterprise intentions", "enterprise model", "enterprise modeling", "enterprise requirements",
+  "enterprise resource planning", "enterprise resource planning (erp)", "enterprise service bus", "enterprise software", "enterprise systems", "enterprise-level impacts", "entity coreference", "entity extraction",
+  "entity-relationship model", "entornos colaborativos", "entrevista abierta", "entrevista independiente de contexto", "environment", "environment assertion", "environment assertions", "environment centric",
+  "environment model", "environment modeling based requirements engineering", "environment modelling", "environmental assumptions", "environmental assumptions and conditions", "environmental determinants", "environmental economics", "environmental management",
+  "environmental safety", "epidemiology", "epistemology", "equational reasoning", "equações estruturais", "equipes ágeis", "equisito legal", "equity-diversity-inclusion",
+  "ergonomics", "ergonomía cognitiva", "erp application", "erp customising", "erp systems", "error checking", "eru", "escalabilidade",
+  "escalation prediction", "escenarios", "especificación de requisitos", "especificación formal", "especificação de requisitos", "especificação semi-formal de requisitos", "essential", "essential interaction pattern",
+  "estado da arte", "estimación", "estimation", "estimativa de tamanho de projetos de software", "estudo de caso", "estudo empírico", "estudo exploratório", "etasm",
+  "ethical ai", "ethical concerns", "ethical considerations", "ethical design", "ethical software engineering", "ethics", "ethics in software engineering", "ethnography",
+  "etnografia", "eu data protection legislation", "europe", "evaluation", "evaluation algorithm", "evaluation mechanism", "evaluation methods", "evaluation metrics",
+  "evaluation of tool", "event inference", "event log", "event logs", "event-b", "event-driven process chain", "event-driven process chains", "evidence",
+  "evidence evolution", "evidence management", "evidence traceability", "evidence-based requirements engineering", "evidence-based risk evaluation", "evidence-based software engineering", "evidence-driven risk assessment", "evolución de la práctica",
+  "evolution", "evolutionary computation", "evolutionary lifecycle", "evolving requirements", "example mapping", "exception handling", "executable specifications", "execution semantics",
+  "exemplar", "expectation management", "experience", "experience report", "experience requirements", "experiences", "experiential learning", "experiment",
+  "experiment-driven", "experimental comparison", "experimental design", "experimental evaluation", "experimental software engineering", "experimentação", "experiments", "experiência de desenvolvedor",
+  "experiência do usuário", "expert judgement", "experts", "explainability", "explainability requirements", "explainable ai", "explainable artificial intelligence", "explainable hardware",
+  "explainable software", "explainable software systems", "explainable systems", "explainble software", "explanation timing", "explanation user interface", "explanations", "explanatory case study",
+  "exploration phase", "exploratory", "exploratory case study", "exploratory experiment", "exploratory experiments", "exploratory research", "exploratory study", "exploring",
+  "exploring requirements alternatives", "extended feature models", "extended lexicon", "extensions", "extensions to uml", "extensão", "external quality", "extra-functional requirements",
+  "extraction", "extranets", "eye blink input", "eye movement pattern", "eye tracking", "eye-tracking", "f-measure", "face",
+  "face detection", "facial palsy", "facilitación gráfica", "facilitation", "facilitator", "factor surveys", "factores situacionales", "factual and temporal uncertainty",
+  "failure", "failure analysis", "failure requirements", "fair", "fairness", "fairness analysis", "false negatives", "false positives",
+  "family of experiments", "family pattern", "family physicians", "fatores de qualidade", "fatores humanos", "fault tree", "fault tree analysis", "fault-tolerance",
+  "feathers", "feature", "feature compositions", "feature dependency", "feature description and testing", "feature diagram", "feature identification", "feature interaction",
+  "feature model", "feature model evolution", "feature modeling", "feature modeling viewpoints", "feature modelling", "feature models", "feature recommendation", "feature request",
+  "feature requests", "feature requests management systems", "feature selection", "feature space", "feature specifications", "feature testing", "feature usage analysis", "feature-base approach",
+  "feature-oriented requirements modeling", "feature-similarity model", "features", "features of software", "federated learning", "feeback", "feedback", "feedback acquisition",
+  "feedback analysis", "feedback categorisation", "feedback clustering", "feedback from participants", "feedback gathering", "feedback loops requirements modeling causal loop diagrams requirements monitoring", "feedback mining", "feedback tool",
+  "ferramenta", "ferramenta computacional", "ferramenta de requisitos", "ferramentas", "ferramentas case", "field experiment", "film studies", "film theory",
+  "filmmaking", "filters", "final year project", "financial document", "financial product suite", "financial systems", "financial technologies", "fine-tuning bert",
+  "finite state machine", "finite state machines", "first order logic", "fisma", "fit criteria", "fitness relationship", "fixed price contract", "fixed-point theorem",
+  "flaw taxonomy", "flexibility", "flexiview", "flow expressions", "flujo de datos", "fmeca", "focus group", "focus groups",
+  "focus+context", "fog computing", "fol", "food safety", "food safety standards", "food traceability", "foom", "forensic readiness",
+  "forensic-ready software systems", "formal", "formal analysis", "formal analysis of requirements", "formal and informal information", "formal argumentation", "formal definition", "formal description",
+  "formal framework", "formal method", "formal methods", "formal model", "formal modeling and analysis", "formal models", "formal properties modeling", "formal requirements",
+  "formal requirements analysis", "formal requirements engineering", "formal requirements modelling", "formal requirements specifications", "formal specification", "formal specification languages", "formal specifications", "formal verification",
+  "formalism", "formality", "formalization", "formalize requirement", "formação profissional", "formula model", "forum mining", "forums",
+  "fpga", "frame problem", "frame semantics", "framenet", "framework", "framework for security requirement engineering", "framework i*", "framework istar",
+  "framework nfr", "frameworks", "free software tools", "free-form sketching", "frequency", "frequency modulation", "frontiers", "fuel economy",
+  "function and non-functional requirements", "function point counting", "functional analysis", "functional and non-functional requirements", "functional architecture", "functional dependency", "functional modeling", "functional requirements",
+  "functional requirements catalog", "functional requirements modeling", "functional requirements prioritization", "functional requirements taxonomy", "functional reuse", "functional safety", "functional security requirements", "functional size",
+  "functional software testing", "functional specifications", "fund activities", "fundamentals", "função de pertinência", "fusa", "future", "future research",
+  "fuzzy c-means", "fuzzy goals", "fuzzy logic", "fuzzy sets", "gaia-x", "gam", "game", "game design document",
+  "game development", "game requirements", "game software", "game theory", "game use case modeling", "game user factors", "gameplay balancing", "gameplay design",
+  "gameplay requirements", "gamer user factors", "games", "gamification", "gamification techniques", "gamificação", "gap analysis", "garantia de segurança",
+  "gbtcm", "gdpr", "gdpr compliance", "gender", "gender bias", "gendermag", "general data protection regulation (gdpr)", "generality",
+  "generative ai", "generators", "generic requirements", "generic use cases", "genetic algorithm", "genetic algorithms", "genetic programming", "gerenciamento",
+  "gerenciamento conflito", "gerenciamento de requisitos", "gerse", "gerência", "gerência de projeto", "gestión de requisitos", "gestión del conocimiento", "gestão de conhecimento",
+  "gestão de processos de requisitos", "gherkin", "githhub", "github", "github issues", "global decision making", "global organisations", "global software development",
+  "global software engineering", "global south", "glosarios", "glossary", "glossary extraction", "glossary term extraction", "go2s process", "goal",
+  "goal analysis", "goal based reasoning", "goal change management", "goal conflicts", "goal evolution", "goal mining", "goal mode", "goal model",
+  "goal model annotation", "goal model refinement", "goal modeling", "goal modelling", "goal modelling tool", "goal models", "goal orientation", "goal oriented analysis",
+  "goal oriented approaches", "goal oriented requirement engineering", "goal oriented requirement language", "goal oriented requirements engineering", "goal oriented requirements engineering (gore)", "goal reasoning", "goal structuring notation (gsn)", "goal variability",
+  "goal violation detection", "goal-based frameworks", "goal-based modelling", "goal-based reasoning", "goal-based requirements engineering", "goal-directed information analysis", "goal-oriented", "goal-oriented analysis",
+  "goal-oriented approach", "goal-oriented methodologies", "goal-oriented modeling", "goal-oriented modelling", "goal-oriented models", "goal-oriented reasoning", "goal-oriented requirement engineering", "goal-oriented requirement language",
+  "goal-oriented requirement language (grl)", "goal-oriented requirements", "goal-oriented requirements analysis", "goal-oriented requirements engineering", "goal-oriented requirements engineering (gore)", "goal-oriented requirements language", "goal-question-metric", "goals",
+  "goals elicitation", "goals modelling", "gold standard", "good practices", "google colab", "google scholar", "goped", "gore",
+  "gore  goal oriented requirements engineering", "goro", "governance", "government", "government projects", "governo federal brasileiro", "gpi-hr", "gpt-3",
+  "gpt-4", "gpt-4 model", "gqm", "grammar", "grand challenge of traceability (gct)", "graph analysis", "graph analytics", "graph theory",
+  "graph transformation", "graphical models", "graphical notations", "graphical representation", "graphical user interfaces", "graphics", "graphs", "greek mythology",
+  "green requirements", "green software", "green software engineering", "grl", "grl modeling", "grounded systems engineering methodology", "grounded theory", "grounding",
+  "group decision making", "group recommender systems", "groupware", "gsem", "gt4cci", "gui prototyping", "gui test", "guidance",
+  "guideline rules", "guidelines", "gênero", "h-cps", "h5", "hackathon", "hairy task", "handwritten recognition",
+  "hard skills", "hardware", "hardware requirements", "hasso plattner", "hawthorne effect", "hazard", "hazard analysis risk assessment", "hazard assessment",
+  "hazard identification", "hazard relation diagrams", "hazard situations", "hazard-mitigating requirements", "hazards", "hazop analysis", "hazop process", "hci",
+  "headphones", "health", "health and safety", "health and well-being", "health care", "health informatics", "health information system", "health measures",
+  "healthcare", "healthcare it", "healthcare requirements", "healthcare software", "healthcare workers", "healthy aging", "healthy-aging", "heart",
+  "hedging", "hedonic quality", "herramienta", "heterogeneity", "heterogeneous engineering", "heuristic analysis", "heuristics", "heurísticas",
+  "heurísticas de nielsen", "hierarchic correlation", "hierarchical approach", "hierarchical clustering", "high quality requirements", "high temperature superconductors", "high-level enterprise cloud bus petri-net", "higher education",
+  "higher level inconsistency", "highly automated driving", "highly automated vehicles", "hime", "hipaa", "hipaa compliance", "his", "historization",
+  "history", "histórias de usuário", "hofstede", "hohfeld rights", "home-based healthcare", "homecare systems", "homelessness", "hope smartphone app",
+  "horses", "hospitality", "hospitals", "hr project", "html", "human analyst", "human aspects", "human barriers",
+  "human computer interaction", "human context", "human factor", "human factors", "human factors in computing", "human judgements", "human multi-agent collaboration", "human resource pattern",
+  "human resources", "human system integration", "human values", "human-centric", "human-centric characteristics", "human-centric design", "human-centric elicitation", "human-computer interaction",
+  "human-error", "human-machine collaboration", "human-robot interaction", "human/computer dialogue", "humans", "human–computer interface (hci)", "hybrid events", "hybrid method",
+  "hybrid process", "hybrid products", "hybrid systems", "hypernym", "hyponym", "hypothesis engineering", "hypothesis-oriented", "i",
+  "i*", "i*  aspects", "i* framework", "i* language", "i* modelling", "i* models", "i-estrela", "i-star",
+  "i<sup>*</sup> framework", "i<sup>*</sup> methodology", "ia", "iaas", "iaas security", "ibm cplex", "ict4d", "idd",
+  "idea generation", "ideal", "ideation", "identification", "iec 61508", "iec standards", "ieee activities", "ieee29148",
+  "ignition", "image analysis", "imbalanced data", "imi", "impact", "impact analysis", "impact assessment", "implantação de sistema erp",
+  "implementation", "implementation of erp system", "implementation-centric", "implementing", "implied scenarios", "importance assessment", "importance of ignorance", "improvement patterns",
+  "in-class discussion", "in-situ marine data", "inclusion", "inclusão", "incomplete requirement", "incomplete requirements specifications", "incompleteness", "inconsistency",
+  "inconsistency analysis", "inconsistency detection", "inconsistency management", "incorrectness", "incremental", "incremental adoption", "incremental development", "incremental refinement",
+  "incremental software development", "incremental verification", "incrementality", "index", "indexterms-requirements", "indicator", "indicators", "indirect influence relations",
+  "indium tin oxide", "industrial", "industrial case study", "industrial control systems", "industrial data", "industrial democracy", "industrial engineering", "industrial experience",
+  "industrial relations", "industrial requirements", "industrial training", "industry", "industry 4", "industry and research collaboration", "industry demands", "industry needs",
+  "industry practices", "industry standard", "industry standards", "industry study", "industry track", "industry trials", "indústria de software", "indústria farmacêutica",
+  "inertia", "influence", "influence diagrams", "infor-mation retrieval", "informal requirements change", "informal structured domain", "information", "information analysis",
+  "information and communication technologies", "information extraction", "information flow", "information machine", "information management", "information model", "information needs", "information overload",
+  "information quality", "information requirements", "information requirements analysis", "information requirements elicitation", "information retrieval", "information reuse", "information security", "information security management",
+  "information security management system", "information security risk management", "information source", "information space", "information system", "information system design processes", "information system re-engineering", "information systems",
+  "information systems (is)", "information systems design", "information systems development", "information systems requirements", "information technology", "information type identification", "information type levels", "information types",
+  "information visualisation", "informação contextual", "informed consent", "infraestrutura de ti", "ingenias scrum methodology", "ingenieria de requisitos", "ingeniería de métodos situacional", "ingeniería de requerimientos",
+  "ingeniería de requisitos", "ingeniería de software", "inheritance", "innovation", "innovation management", "innovation modeling", "innovative software", "input interface",
+  "input variables", "inspecciones", "inspección", "inspection", "inspections", "inspeção", "inspeção semiótica", "instagram",
+  "instantiation", "instruction sets", "integer constraints", "integer linear programming", "integer linear programming (ilp)", "integer programming", "integration", "integration requirements",
+  "inteligência artificial", "intellectual property", "intelligent networks", "intelligent systems", "intelligent systems engineering", "intelligent tool support", "intelligent transportation systems", "intention mining",
+  "intention to use (itu)", "intentional modeling", "intentional models", "intentionality", "intents", "intenções", "inter-component communication", "inter-structure",
+  "interaction", "interaction analysis", "interaction data", "interaction design", "interaction detection", "interactive agents", "interactive applications", "interactive digital narrative",
+  "interactive machine learning", "interactive modeling", "interactive requirements elicitation", "interactive tutorial", "interactive video", "interactivity", "interação humano-computador", "interação humano-robô",
+  "interdependent requirements", "interdisciplinary design", "interdisciplinary systems", "interdisciplinary teams", "interest", "interface", "interface requirements definition", "interlocking system",
+  "intermediated interactions", "internal quality", "internal stakeholders", "international collaboration", "international mobile equipment identity (imei)", "internationalisation", "internet", "internet das coisas",
+  "internet of things", "internet of things (iot)", "internet voting", "interoperability", "interoperation", "interorganizational information systems", "interorganizational networks", "interpretability",
+  "interpretable machine learning", "interpretive structural modelling (ism)", "interrelated requirements", "interspecies communication", "interview", "interview mistakes", "interview review", "interview study",
+  "interviews", "intra-structure", "introduction", "introductory programming courses", "introdução", "introspection", "intrusion detection system", "intuitive understanding",
+  "investigación experimental", "investigación exploratoria", "investments", "invisibility", "involvement participation", "iot", "ip networks", "ires",
+  "is analysis methodologies", "is development", "iso 26262", "iso 27001", "iso 27002", "iso standards", "iso/iec 12207", "iso/iec 25000",
+  "iso/iec 9126-1", "iso/iec/ieee 15939:2017", "iso/sae 21434", "issue based information systems", "issue classification", "issue management", "issue reports", "issue tracking system",
+  "issue tracking systems", "istar", "istar 2", "istar extensions", "istar framework", "istar model", "istar models", "istar social modeling",
+  "istar4safety", "istarml", "it business value", "it ecosystem", "it organization", "it security", "it service", "iterative methods",
+  "itrust", "i∗", "i∗ compliance", "i∗ model checking", "j2me", "jacobian matrices", "java", "java me",
+  "jerarquías naturales", "jgoose", "jigsaw puzzle", "jira", "jistar", "jmf", "job advertisements", "job design",
+  "job map", "job satisfaction", "job shop scheduling", "jobs-to-be-done", "jogos educacionais", "jogos no ensino de requisitos", "jogos sérios", "joining processes",
+  "journalism", "journey maps", "jucmnav", "just-in-time", "just-in-time re", "just-in-time requirement", "just-in-time requirements", "just-in-time requirements engineering",
+  "justification frameworks", "justifications", "k", "kanban", "kano", "kano model app reviews nlp clustering", "kansei engineering", "kaos",
+  "kernel sentences", "keynote speakers", "kind computing", "kindness", "knowledge", "knowledge acquisition", "knowledge acquisition systematic", "knowledge assisted configuration",
+  "knowledge audit", "knowledge base", "knowledge carrying software", "knowledge catalogue", "knowledge construction", "knowledge discovery from data", "knowledge distillation", "knowledge driven",
+  "knowledge engineering", "knowledge gap", "knowledge gaps", "knowledge graph", "knowledge infrastructure", "knowledge injection", "knowledge management", "knowledge representation",
+  "knowledge representation learning", "knowledge reuse", "knowledge sharing", "knowledge transfer", "knowledge work", "knowledge-based question answering", "knowledge-based system", "knowledge-based systems",
+  "knowledge-intensive business processes", "knowledge-level", "knowledge-management", "label propagation", "laboratories", "lack of communication", "laddering", "lal",
+  "language", "language extended lexicon", "language model", "language models", "language models (lms)", "language z", "large language model", "large language model (llm)",
+  "large language models", "large language models (llms)", "large scale", "large specifications", "large-scale", "large-scale agile", "large-scale agile system development", "large-scale project delivery",
+  "large-scale requirements engineering", "large-scale research project", "large-scale system", "large-scale systems", "late requirements", "late requirements determination", "latent semantic indexing", "latin america",
+  "lattices", "law", "law compliance", "law variability", "laws", "lawyers", "layered architecture", "layered security model",
+  "layout", "layout-based clustering", "lead", "lead-user method", "lean", "lean-design science research", "learnability", "learning",
+  "learning experiences", "learning from practice", "learning outcomes", "legacy", "legacy systems", "legal and regulative constraints", "legal and regulatory compliance", "legal compliance",
+  "legal contract", "legal contracts", "legal coverage", "legal documents", "legal domain knowledge", "legal factors", "legal interpretation", "legal markup",
+  "legal metadata", "legal ontology", "legal requirement traceability", "legal requirements", "legal texts", "legal-grl", "legged locomotion", "legislation",
+  "legislation analysis", "legitimate user-driven specification", "lei geral de proteção de dados", "lei geral de proteção de dados (lgpd)", "lel", "lenguaje natural", "lessons", "lessons learned",
+  "levels of assurance", "lexical analyses", "lexico ampliado da linguagem", "lexicon", "lgpd", "life-cycle", "lightweight", "lightweight formal methods",
+  "lightweight meta-modeling", "likelihood assessment", "linear temporal logic", "linear temporal logic constraint satisfiability explainable ai", "linguagem de interface", "linguagem i*", "linguagem natural", "linguagens de modelagem",
+  "linguistic", "linguistic annotation tool", "linguistic decision making models", "linhas  de produtos  de software", "linhas de produtos de software", "link prediction", "linked data", "linux",
+  "listening", "literature review", "literature survey", "live study", "liveness", "living information systems", "living lab", "living labs",
+  "llm", "lntentional modeling", "localisation", "location-based", "logging", "logging in software systems", "logic", "logic analysis",
+  "logical architectures", "logical deduction", "logical structures", "logical test cases", "logistic regression", "logistics", "logistics systems", "long short term memory",
+  "long short-term memory (lstm) networks", "long short-term memory architecture", "long-tail distribution", "long-term care", "long-term digital monitoring", "long-term product planning", "long-term solution planning", "longitudinal fieldwork",
+  "lts", "luggage handling", "léxico", "léxico extendido del lenguaje", "mab-ex framework", "machine learning", "machine learning (ml)", "machine learning algorithms",
+  "machine-learned components", "machine-learning", "magnet", "maintainability", "maintenance", "maintenance and evolution", "maintenance engineering", "maintenance requirements",
+  "malware", "management", "management information systems", "management of knowledge", "management training", "managing requirements knowledge", "manual task", "manufacturing",
+  "manutenção de software", "mapa da jornada do usuário", "mapas conceituais", "mapas conceptuales", "mapas mentales", "mape-k loop mechanism", "mapeamento sistemático", "mapping between requirements model and architectural model",
+  "mapping study", "mappings", "market driven product centered continuous requirements engineering", "market regulation", "market research", "market value", "market-driven product-centered continuous requirements engineering", "market-driven requirements",
+  "market-driven requirements engineering", "marketing and sales", "marketing engineering", "marketing management", "mas", "mashups", "mass personalization", "massive multiplayer online role-playing games",
+  "master–slave model", "mata", "matching", "matchmaking", "mathematics", "matrix-based", "maturidade", "maturity evaluation",
+  "maturity matrix", "maturity model", "maturity models", "maude", "mbse", "mbti", "mc/dc", "mcda",
+  "mda", "mda computer independent model", "mdd", "mde", "mdsd", "meaningful transparency", "meansi", "measurement",
+  "measurement model", "measurement program", "measurement repository", "measurement standards", "measurements", "measures", "mechatronics", "mechatronics systems",
+  "media", "medical device development", "medical device safety and security", "medical game", "medical informatics", "medical information systems", "medical services", "medication adherence",
+  "medicine", "medición", "meeting", "meetings", "melhoria", "melhoria de processo de requisitos", "memory systems", "mental health",
+  "mental health professionals", "mental model", "mentoring", "mer", "mercado brasileiro", "mereología", "merging", "message sequence charts",
+  "message structures", "meta", "meta-case environment", "meta-model", "meta-modeling", "meta-requirements", "metadata", "metamodel",
+  "metamodeling", "metamodelling", "metamodelo", "metamodels", "metamorphic testing", "metaphor", "metaverse human-computer interaction system", "method",
+  "method adoption", "method assembly", "method components", "method engineering", "method evaluation model (mem)", "method integration", "method-in-action", "methodologies",
+  "methodologies and tools", "methodology", "methods", "metodologia de desenvolvimento", "metodologias ativas", "metodologias ágeis", "metodología", "metric",
+  "metrics", "metrics of requirements", "metrology", "mhealth", "micro-crowd", "microservice", "microservice decomposition", "microsserviço",
+  "middle-out", "middleware", "migração", "migração para nuvem", "mihos", "mild intellectual and developmental disability", "milling machines", "mind map",
+  "mind mapping modelling", "mind maps", "mindmaps", "minimal spanning trees (mst)", "mining automation", "mining issue tracker", "mining requirements", "mining software repositories",
+  "mining user feedback", "missing requirements specifications", "mission critical systems", "mission operation", "mistakes", "mistakes in programming assignments", "mistral", "misunderstandings",
+  "misuse case", "misuse case model", "misuse cases", "mitigation", "mixed method", "mixed method research", "mixed methods", "ml",
+  "mobile", "mobile agents", "mobile app development", "mobile app requirements", "mobile application improvement", "mobile applications", "mobile apps", "mobile communication",
+  "mobile computing", "mobile crowdsensing", "mobile data collection", "mobile interaction", "mobile interfaces", "mobile learning", "mobile requirements", "mobile services",
+  "mobile tools", "mobile-health applications", "mobility requirements", "mockups", "model", "model analysis", "model based diagnosis", "model based systems engineering",
+  "model based systems engineering (mbse)", "model checking", "model checking specifications", "model completeness", "model complexity", "model construction", "model declaration", "model defects",
+  "model derivation", "model driven development", "model driven development (mdd)", "model driven engineering", "model driven requirements", "model engineering", "model evaluation", "model evolution",
+  "model extraction", "model federation", "model footprinting", "model generation", "model interchange", "model iteration", "model management", "model merging",
+  "model modeling", "model refinement description", "model slicing", "model synchronization engines", "model synthesis", "model template", "model transformation", "model transformations",
+  "model visualizations", "model- driven development", "model-based", "model-based analysis", "model-based development", "model-based engineering", "model-based programming", "model-based representation",
+  "model-based requirements analysis", "model-based requirements elicitation", "model-based requirements engineering", "model-based requirements validation", "model-based systems engineering", "model-based testing", "model-based traceability", "model-based verification",
+  "model-driven", "model-driven architecture", "model-driven development", "model-driven engineering", "model-driven engireering", "model-driven requirements", "model-driven requirements engineering", "model-driven software development",
+  "model-driven software engineering", "model-driven testing", "model-driven transformations", "model-driven validation", "model-to-model transformations", "model@runtime", "modelado de procesos de negocio", "modelagem",
+  "modelagem de hiperdocumentos", "modelagem de recursos humanos", "modelagem i*", "modelagem informacional", "modelagem multimídia", "modelagem organizacional", "modelagem organizacional e teoria da atividade", "modelagem uml",
+  "modelbased engineering", "modelica", "modeling", "modeling and simulation", "modeling automation", "modeling interaction", "modeling languages", "modeling method requirements",
+  "modeling methods", "modeling mistakes", "modeling tool", "modeling tools", "modelling", "modelling bot", "modelling language", "modelling language design",
+  "modelling languages", "modelling the data perspective", "modelo", "modelo conceitual", "modelo de features", "modelo de hipertexto", "modelo de negócio", "modelo de transformação",
+  "modelos arquiteturais", "modelos bpmn", "modelos conceituais", "modelos conversacionales avanzados", "modelos de flujo de trabajo", "modelos de negócio", "modelos de procesos metas", "modelos de requisitos",
+  "modelos en lenguaje natural", "modelos organizacionais", "models", "models at runtime", "models measurement", "models@runtime", "modularidade", "modularity",
+  "modus operandi", "molecular programming", "monitoring", "monitoring solution", "monolítico", "monte carlo", "morphological box", "moscow",
+  "most influential paper", "motivation", "motivational modelling", "motivational models", "motivations", "mps", "multi attribute utility theory", "multi-agent system",
+  "multi-agent systems", "multi-agents systems", "multi-artifact testing", "multi-aspectual analysis", "multi-case study", "multi-channel service design", "multi-criteria automated requirements prioritization", "multi-criteria decision analysis",
+  "multi-criteria preference analysis", "multi-criteria requirement prioritization", "multi-dimensional issue", "multi-entity bayesian network", "multi-generational software products", "multi-label", "multi-label classification", "multi-level systems",
+  "multi-media", "multi-methods", "multi-modal data analysis", "multi-objective algorithm", "multi-objective decision making", "multi-objective genetic algorithms", "multi-objective optimization", "multi-perspective modeling",
+  "multi-sample dropout", "multi-stakeholder", "multi-standard integration", "multi-view modeling", "multi-way analysis", "multiagent system", "multidimensional modeling", "multidimensional schema",
+  "multidimensional systems", "multidisciplinary", "multidisciplinary engineering", "multidisciplinary skills", "multidisciplinary team", "multilingual", "multilingual annotation", "multimedia",
+  "multimedia systems", "multiple case study", "multiple information sources", "multiple ontologies", "multiple regression model", "multiple regulations", "multiple stakeholders", "multiple viewpoints",
+  "multitasking", "multivalued logic", "multivocal mapping study", "multiword expressions", "mutation analysis", "mvc application", "método scr", "métodos formais",
+  "métodos ágeis", "métrica", "métricas", "métricas de tamanho de software", "n-gram", "naive bayes", "named entity recognition", "named-entity recognition",
+  "napire", "narrativa de conflitos", "narratives", "nasa", "nash equilibrium", "national work patterns", "natural langage requirements", "natural language",
+  "natural language (nl)", "natural language analysis", "natural language artifacts", "natural language documents", "natural language generation model", "natural language inference", "natural language oriented requirements models", "natural language parsing",
+  "natural language process", "natural language processing", "natural language processing (nlp)", "natural language requirements", "natural language requirements specifications", "natural language text", "natural languages", "natural langugage",
+  "natural-language requirements", "navigation", "navigation techniques", "navigational concerns", "ndr", "ndr-tool", "need", "needs",
+  "needs elicitation", "negociação", "negotiable and non-negotiable authorizations", "negotiation", "negócio", "nested relational databases", "network address translation", "network analysis",
+  "network science", "network security", "networked value constellations", "networks", "neural machine translation", "neural network", "neural networks", "new product design",
+  "new product development", "new product introduction", "next release planning", "next release problem", "nfr", "nfr challenges", "nfr framework", "nfr-framework",
+  "nfrs", "nist 800-53", "nl requirements", "nlp", "nlp tasks", "nlp4re", "no-code", "nocuous ambiguity",
+  "nominal group technique", "nomos 2", "non determinism", "non functional requirements", "non functional requirements trade-off", "non-formal", "non-functional", "non-functional requirement",
+  "non-functional requirements", "non-functional requirements (nfr)", "non-functional requirements (nfrs)", "non-functional requirements multi-attribute decision mechanism", "non-functional requirements trade-off", "non-human", "nonfunctional requirement", "nonfunctional requirements",
+  "nonviolent communication", "normas", "norms", "notation definition", "notação textual", "notice and choice", "noun-phrase coreference resolution", "novice developers",
+  "npd", "nuclear", "nuclear energy", "numeric constraints", "numerical assignment (na)", "nòmos", "object library  tracing environments", "object oriented",
+  "object oriented databases", "object oriented development", "object oriented modeling", "object technology", "object-oriented", "object-oriented analysis", "object-oriented methods", "object-oriented modelling",
+  "object-process methodology", "objective", "objectives", "objectives and constraints", "objetivos informacionais", "objetivos organizacionais", "observation", "observations",
+  "observer technique", "obstacle analysis", "obstacles", "oceans", "ocl", "ocl specifications", "ocr", "oem - supplier collaboration",
+  "off nominal behaviors", "off-nominal behaviors", "off-the-shelf component", "off-the-shelf information systems", "older adult", "older adults", "omics", "omt",
+  "on board software", "on-board system", "on-budget", "on-function", "on-line social systems", "on-site requirements elicitation", "on-time", "one-class svm",
+  "online", "online community", "online discussions", "online dispute resolution", "online platforms", "online questionnaire", "online social network (osn)", "online social networking platforms",
+  "online user feedback", "online user reviews", "ontoistar", "ontologia", "ontologias", "ontological classification", "ontological expressiveness", "ontological modeling",
+  "ontologies", "ontology", "ontology driven integration", "ontology engineering", "ontology for requirements", "ontology integration", "ontology mapping", "ontology merging",
+  "ontology-based requirements analysis", "ontology-based requirements elicitation", "ontology-based use case elicitation", "oo methods", "oo-dfd", "oo-method", "opacity", "open banking",
+  "open challenges", "open charge point protocol (ocpp)", "open environment", "open innovation", "open innovation project", "open research", "open source", "open source re",
+  "open source requirements", "open source soft-ware", "open source software", "open source software development", "open standard", "open-source systems", "open-target requirements", "opensource re",
+  "openup", "operacionalizações", "operation", "operational environment", "operational planning", "operational requirements", "operational research", "operational service",
+  "optimization", "optimization models", "optimization modulo theories", "optimization of creativity enhancement technique", "oral communication", "organisation", "organisational context", "organisational culture",
+  "organisational modelling", "organisational structure modelling", "organization", "organizational alignment", "organizational climate", "organizational culture", "organizational environments", "organizational learning",
+  "organizational model", "organizational modeling", "organizational modeling pattern", "organizational modelling", "organizational models", "organizational perspective", "organizational service", "orientação a objetos",
+  "oss", "oss development", "other disciplines", "other domains", "outcome feedback", "outcome-based regulations", "outreach", "outsourcing",
+  "owl", "p-cnp", "paas", "packaged enterprise system", "packaging", "packet switching", "padrão de requisito de software", "padrão de requisitos",
+  "padrões", "padrões de privacidade", "padrões de processo", "padrões de sintaxe", "paediatric oncology", "pair-wise testing", "pairing", "pairwise comparison",
+  "paisley", "pandemic", "panel", "panel discussion", "paper audit trail", "paper classification", "paper evaluation criteria", "paper prototyping",
+  "paradigma de aspectos", "parallel applications", "parallel systems", "paramagnetic resonance", "parameter estimation", "parameterized transformation", "pareto optimality", "parser generator",
+  "part of speech tags", "part-of-speech tagging", "partial models", "participative goal modelling", "participatory design", "participatory research design method", "passive voice", "password managers",
+  "patent law domain", "patents", "patient health monitoring", "patient recruitment and retention", "patrones", "patrones de requisitos", "pattern", "pattern analysis",
+  "pattern design", "pattern languages", "pattern recognition", "patterns", "payload", "payment telematic systems", "pdl", "pe",
+  "pedagogy", "peer review", "peer support systems", "peer-review", "peer-to-peer systems", "penalty clause", "penalty model", "penetration testing",
+  "people with disabilities (pwd)", "perceived ease of use (peou)", "perceived ease of usefulness (pu)", "perceived usefulness", "perception", "perception gap", "perception of similarity", "perfil profissional",
+  "performance", "performance analysis", "performance aspects", "performance evaluation", "performance indicators", "performance measures", "performance modeling", "performance models",
+  "performance requirements", "performance requirements modeling", "permission", "persona", "persona technique", "personae non gratae", "personal data", "personal digital assistants",
+  "personal requirements", "personalised information provision", "personality", "personality profiles", "personality traits", "personality type", "personality types", "personalization",
+  "personas", "personnel", "perspective-based requirements specification", "perspective-based views", "perspectives", "perspicuity", "persuasive systems", "persuasive technology",
+  "pervasive computing", "pervasive mobile games", "pervasive technologies", "pesquisa qualitativa", "petri net", "petri nets", "petrochemical industry", "phase estimation",
+  "phase event automata", "phenomenological evaluation", "philanthropic projects", "philosophy", "phishing", "phonetic analyses", "phrasing guidelines", "physical",
+  "physical metaphor", "physics computing", "physics of notations", "pia", "pilot experiment", "pipeda", "pivot tables", "pl-aovgraph",
+  "plan-driven processes", "planning", "planning error checking", "planning procurement for it", "plataforma ome", "platform as a service (paas)", "platform engineering", "platform-requirements",
+  "play-centric requirements engineering", "play-testers", "play-testing", "player", "plc-based control systems", "pm", "poles and towers", "policies",
+  "policy", "policy administration point", "policy document", "policy specification", "political requirements", "politics", "polysemy analysis", "políticas de privacidade",
+  "ponto de vista", "pontos de função", "poor requirements", "portable computers", "portal development", "portfolio management", "portfolios", "porto digital",
+  "positivism", "post-requirements traceability", "post-wimp", "postal services", "power", "power engineering and energy", "power industry", "power system modeling",
+  "practical", "practice", "practices", "practioner's checklist", "practitioner conference", "practitioners", "pragmatic algorithm", "pragmatic ambiguity",
+  "pragmatic interoperability", "pragmatic quality", "pragmatic quality model", "pragmatic requirements engineering", "pragmatics", "pragmatics of communication", "pre y post-seguimiento", "pre-cash valuation",
+  "pre-conceptual schemas", "pre-requirements specification traceability", "precision", "predicate calculus", "predicate logic", "prediction model", "predictive analytics", "predictive modelling",
+  "predictive models", "preference analysis", "preference specification", "preference trade-o", "preference trade-off", "preferences", "premature termination of re", "preproduction",
+  "pretotyping", "prevenção conflito", "principles", "priorities", "prioritisation", "prioritization", "priorização", "priorização de requisitos",
+  "privacidad desde el diseño", "privacidade", "privacy", "privacy analysis", "privacy and security", "privacy arguments", "privacy aware", "privacy awareness",
+  "privacy by design", "privacy by design introduction", "privacy concerns", "privacy conflict", "privacy criteria method", "privacy dashboards", "privacy design strategies", "privacy engineering",
+  "privacy enhancing technologies", "privacy law", "privacy notice", "privacy patterns", "privacy policies", "privacy policy", "privacy policy analysis", "privacy principles",
+  "privacy requirement", "privacy requirements", "privacy requirements elicitation", "privacy requirements engineering", "privacy requirements methodologies", "privacy requirements specification", "privacy risk", "privacy rules",
+  "privacy shield", "privacy-process patterns", "private equity", "privilege", "privileges", "pro-totyping", "probabilistic goals", "probabilistic models",
+  "probing questions", "problem articulation", "problem definition", "problem dependencies", "problem diagrams", "problem domain ontology", "problem frame", "problem frames",
+  "problem frames approach", "problem progression", "problem solving", "problem statement", "problem taxonomy", "problem world", "problem-solving", "problema",
+  "problemas na elicitação de requisitos", "problems", "procedure model", "procesamiento del lenguaje natural", "proceso de requisitos", "procesos de la ingeniería de requerimientos", "process", "process analysis",
+  "process assessment", "process aware information system", "process control", "process descriptions", "process design", "process efficiency", "process enactment mechanism", "process evaluation",
+  "process guidance", "process history", "process improvement", "process integration", "process mining", "process model", "process modeling", "process modelling",
+  "process models", "process outcomes", "process patterns", "process planning", "process quality", "process requirements", "process requirements engineering", "process requirements engineering improvement",
+  "process reuse", "process tailoring", "process validation", "process-aware information system", "process-oriented", "processamento de linguagem natural", "processo", "processo de documentação",
+  "processo de software", "processor scheduling", "processos", "processos de negócio", "processosde negócio", "procurement", "procurement process", "procurement project",
+  "producción automática de software", "product definition", "product design", "product development", "product development process", "product evaluation", "product evaluation and selection", "product families",
+  "product family", "product forums", "product information systems", "product innovation", "product life cycle", "product life cycle management (plm)", "product lifecycle", "product lifecycle management",
+  "product line", "product line engineering", "product line requirements engineering", "product lines", "product management", "product manager", "product owner", "product portfolio management",
+  "product roadmap", "product scoping", "product service system", "product service systems", "product specifications", "product strategy", "product usage", "product variability",
+  "product variability modelling", "product vision", "product-line architecture", "production", "productivity", "products", "professional community", "professional profile",
+  "profitability", "program analysis", "programmable logic controler", "programming", "programming assignments", "programming profession", "project family", "project involvement",
+  "project management", "project portfolio management", "project retrospective", "project size", "project-specific traceability", "projeto", "projeto de banco de dados distribuídos", "projeto de hiperdocumentos",
+  "prompt engineering", "prompting", "propagação de impactos", "proposals", "propulsion", "protección de datos desde el diseño", "protection", "proteção de dados pessoais",
+  "protocols", "prototipos de interface de usuario", "prototype", "prototype tool", "prototype tools", "prototypes", "prototypical project", "prototyping",
+  "provenance", "proveniência", "provisionments", "provotype", "prê", "prêt à voter", "pss", "psychology",
+  "public good", "public organizations", "public policy", "public procurement", "public requirements", "public sector", "publishing", "pull feedback",
+  "puntos función", "pure", "python framework", "qoc", "qos", "qos broker", "qr elicitation method", "qualidade",
+  "qualitative analysis", "qualitative case studies", "qualitative data analysis", "qualitative evaluation", "qualitative interviews", "qualitative measurements", "qualitative methodology", "qualitative requirements",
+  "qualitative research", "qualitative research evaluation", "qualitative research methods", "qualitative scenarios", "qualitative study", "qualitative survey", "qualities", "quality",
+  "quality analysis", "quality aspects", "quality assessment", "quality assurance", "quality attribute", "quality attribute requirements", "quality attributes", "quality attributes (qas)",
+  "quality attributes evaluation", "quality attributes visualization", "quality characteristic", "quality characteristics", "quality concerns", "quality control", "quality criteria", "quality engineering",
+  "quality evaluation", "quality factor", "quality framework", "quality function deployment", "quality improvement", "quality in use", "quality indicators", "quality management",
+  "quality measurement tool", "quality measures", "quality metrics", "quality model", "quality model of requirements specifications", "quality models", "quality of experience", "quality of experience (qoe)",
+  "quality of life", "quality of models", "quality of requirements", "quality of service", "quality of service (qos)", "quality of software", "quality of software game", "quality of software games",
+  "quality properties", "quality requirement", "quality requirements", "quality requirements (qrs)", "quantification", "quantitative analysis", "quantitative analysis & decision science", "quantitative measurements",
+  "quantitative modelling", "quantitative prioritization", "quantitative reasoning", "quantitative study", "quantum computing", "quantum finite state machines", "quasi-experiment", "queries",
+  "query language", "question answering", "question generation", "question set", "question-answering", "questionnaire", "questionnaire development", "questionnaires",
+  "questions", "queueing analysis", "quick response (qr) code", "quper", "qus framework", "qvt semantics", "radio access networks", "rail transportation",
+  "railway interlocking systems", "railways", "ram", "ramses", "random decision forests", "range evaluation", "rapid prototyping", "rare disease",
+  "rasa open-source", "rastreabilidad", "rastreabilidade", "rastreabilidade de requisitos", "rating estimation", "rational reconstruction", "rationale", "rationale capture",
+  "rationale management", "razões", "rbac", "rdal", "rdf", "rdm maturity", "re", "re analysis skills",
+  "re and program maintenance", "re artifacts", "re education", "re for ai-based safety-critical systems", "re for ecosystems", "re for iopts", "re interaction", "re issues",
+  "re job role", "re methods", "re planning", "re practice", "re practices", "re process", "re process improvement", "re process improvement validation",
+  "re process quality", "re process visualization", "re quality models and their automation", "re with the society", "re-projeto", "re-quirements elicitation", "re-quirements formalization", "re-use",
+  "re4ai", "re4re", "re4sa", "re@21", "re@21 generic requirements reuse", "re@runtime", "reachability", "reactive adaptation",
+  "reactive systems", "read-ability of requirements specifications (rs)", "readability", "readiness", "readiness for act", "reading techniques", "real", "real options",
+  "real time systems", "real-time", "real-time requirements", "real-timed distributed and multi-agent systems", "realidade aumentada", "realism", "reasoning", "reasoning tools",
+  "reasoning@runtime", "rebok re interactive", "recall", "recommendation", "recommendation system", "recommendation systems", "recommendation to omitted steps", "recommendations",
+  "recommender", "recommender system", "recommender systems", "reconfiguration", "record of processing activities (ropa)", "records management policies", "records retention", "recreation",
+  "recurrent neural network", "recurrent neural networks", "recursos humanos", "recycling", "rede de petri", "redes de petri", "redes interorganizacionales", "redundancy",
+  "redundant tests", "reet", "refactoring", "refactoring requirements", "refactorings recommendation", "reference architecture", "reference architectures", "reference components",
+  "reference model", "refinement", "reflection", "reflective practice", "regras heurísticas", "regresión lineal", "regression validation", "regtech",
+  "regulation", "regulation compliance problem", "regulation extraction", "regulation modeling", "regulations", "regulators", "regulatory ambiguity analysis", "regulatory change",
+  "regulatory compliance", "regulatory instruction", "regulatory requirement engineering", "regulatory requirements", "rehabilitation", "reinforcement learning", "relational databases", "relationship",
+  "relationships", "relative completeness", "relax", "release management", "release planning", "reliability", "reliability engineering", "reliable software",
+  "remediation requirements", "remote", "remote and/or ballot-box electronic voting (including electronic elections)", "remote e-voting", "repertory grid", "repetition loops", "replicated processes", "replication",
+  "replication study", "repository mining", "repository visualization", "repositório de requisitos", "representation", "representation forms", "reqdl", "reqsys-mdd tool",
+  "requerimientos", "requerimientos aplicaciones web", "requerimientos de software", "requerimientos del usuario", "request for proposals", "request-implementation ratio (ri)", "required content", "requiremen ts formalization",
+  "requirement", "requirement (re) prioritization", "requirement alignment", "requirement analysis", "requirement based testing", "requirement classification", "requirement clustering", "requirement configuration structure",
+  "requirement consistency analysis", "requirement consistency index", "requirement data-set", "requirement decomposition", "requirement definition", "requirement dependencies", "requirement dependency", "requirement discovery",
+  "requirement document", "requirement driven self-adaptation", "requirement elicitation", "requirement elicitation interview", "requirement engineering", "requirement engineering (re)", "requirement engineering (re) language processing (nlp)", "requirement engineering process",
+  "requirement evaluation", "requirement exchange", "requirement extraction", "requirement flow", "requirement granularity", "requirement inconsistency matrix", "requirement inspections", "requirement model",
+  "requirement modeling", "requirement models", "requirement monitoring", "requirement organization", "requirement pattern", "requirement patterns", "requirement prioritization", "requirement relaxation",
+  "requirement representation", "requirement scheduling", "requirement selection", "requirement smells", "requirement specification", "requirement specifications", "requirement structure and management", "requirement syntax templates",
+  "requirement templates", "requirement test status", "requirement testability", "requirement validation", "requirement verification", "requirement-based test generation", "requirements", "requirements  engineering",
+  "requirements abstraction", "requirements abstraction model (ram)", "requirements acquisition", "requirements allocation", "requirements ambiguity detection", "requirements analysis", "requirements analyst", "requirements and acceptance tests alignement",
+  "requirements and design", "requirements and testing in practice", "requirements annotation", "requirements articulation", "requirements artifacts", "requirements as code", "requirements assessment", "requirements assignment",
+  "requirements attributes", "requirements authoring tool", "requirements authorship", "requirements based on perspectives", "requirements based testing", "requirements blogging", "requirements capture", "requirements categorisation",
+  "requirements categorization", "requirements change", "requirements change management", "requirements clarification patterns", "requirements classification", "requirements classification requirements change management architecture quality", "requirements clustering", "requirements communication",
+  "requirements comparison", "requirements completeness", "requirements composition table", "requirements concerns", "requirements concretization", "requirements configurator", "requirements conflict detection", "requirements conflicts",
+  "requirements corpus", "requirements coupling", "requirements data model", "requirements dataset", "requirements debt", "requirements decision-making", "requirements decisions", "requirements defects",
+  "requirements definition", "requirements dependencies", "requirements dependency", "requirements description language", "requirements determination", "requirements development", "requirements dimension", "requirements discordances",
+  "requirements discovery", "requirements discovery and management (rdm)", "requirements document", "requirements document generation", "requirements documentation", "requirements documentation debt", "requirements documents", "requirements domain",
+  "requirements elicitation", "requirements elicitation education", "requirements elicitation framework", "requirements elicitation interview", "requirements elicitation methodology", "requirements elicitation model", "requirements elicitation process", "requirements elicitation techniques",
+  "requirements elicitation: requirements prioritisation", "requirements encapsulation", "requirements engineer", "requirements engineering", "requirements engineering (re)", "requirements engineering and testing", "requirements engineering assessment", "requirements engineering conference",
+  "requirements engineering course", "requirements engineering decision support", "requirements engineering education", "requirements engineering education and training", "requirements engineering elderly users", "requirements engineering for service-oriented computing", "requirements engineering for services", "requirements engineering for user experience",
+  "requirements engineering for user experience including ethnography", "requirements engineering map", "requirements engineering perspective", "requirements engineering practice", "requirements engineering practices", "requirements engineering practices from closed source software development", "requirements engineering process", "requirements engineering process failures",
+  "requirements engineering process improvement", "requirements engineering questions", "requirements engineering reference model", "requirements engineering research", "requirements engineering success", "requirements engineering tasks", "requirements engineering tools", "requirements engineering training",
+  "requirements engineering visualization", "requirements engineering well being health aging", "requirements engineeringeng", "requirements evaluation", "requirements evolution", "requirements exploration", "requirements extraction", "requirements feedback",
+  "requirements formalisation", "requirements formalization", "requirements gathering", "requirements generation", "requirements goal models", "requirements handling", "requirements idea generation", "requirements identification",
+  "requirements identification and classification", "requirements implementation", "requirements inconsistency", "requirements inspection", "requirements intelligence", "requirements interdependencies", "requirements knowledge", "requirements lessons",
+  "requirements management", "requirements management tool", "requirements management tools", "requirements metadata", "requirements metamodel", "requirements methodology", "requirements metrics", "requirements mismatch",
+  "requirements model", "requirements model synthesis", "requirements modeling", "requirements modeling and analysis", "requirements modeling languages", "requirements modelling", "requirements modelling language", "requirements models",
+  "requirements monitorig", "requirements monitoring", "requirements negotiation", "requirements optimization", "requirements patterns", "requirements practices", "requirements prioritisation", "requirements prioritization",
+  "requirements prioritizing", "requirements problem", "requirements process", "requirements process improvement", "requirements prototyping", "requirements quality", "requirements quality attributes", "requirements quality factor",
+  "requirements rationale", "requirements reconciliation", "requirements reference", "requirements refinements", "requirements reflection", "requirements representation", "requirements representation ontology", "requirements requirements specification",
+  "requirements reuse", "requirements reuse process", "requirements review", "requirements reviews", "requirements scoping", "requirements selection", "requirements similarity", "requirements simulation",
+  "requirements simulation and optimisation", "requirements smells", "requirements specification", "requirements specification defect finding", "requirements specification language", "requirements specification techniques", "requirements specification tools", "requirements specifications",
+  "requirements statements", "requirements strategy", "requirements synergy", "requirements taxonomy", "requirements technical debt", "requirements technical debt quantification", "requirements template", "requirements templates",
+  "requirements testing", "requirements tool selection", "requirements traceability", "requirements traceability matrix", "requirements traceability object-orientation", "requirements tracing", "requirements transformations", "requirements translation",
+  "requirements triage", "requirements uncertainty", "requirements update", "requirements validation", "requirements verification", "requirements verification and validation", "requirements violation analysis", "requirements visualization",
+  "requirements volatility", "requirements workflow modeling", "requirements writing", "requirements-awareness", "requirements-based testing", "requirements-borne problem", "requirements-driven collaboration", "requirements-driven software adaptation",
+  "requirements-driven testing", "requirements-engineering", "requirements-identification experiments", "requirements-identification prototype", "requirements-led configurations", "requirements/specifications analysis", "requirements/specifications elicitation methods", "requirements@run",
+  "requirments engineering", "requisi-tos-não-funcionais (rfn’s)", "requisito", "requisito  não funcional", "requisito de software", "requisito funcional", "requisito não funcional", "requisito não-funcional",
+  "requisitos", "requisitos de calidad", "requisitos de privacidad", "requisitos de privacidade", "requisitos de qualidade", "requisitos de recursos humanos", "requisitos de segurança da informação", "requisitos de software",
+  "requisitos de ux", "requisitos do processo de engenharia reversade software", "requisitos funcionais e requisitos não funcionais", "requisitos legais", "requisitos nâo-funcionais", "requisitos não funcionais", "requisitos não-funcionais", "requisitos não-funcionais (rnfs) colaboração",
+  "research", "research agenda", "research agenda and roadmap", "research and development", "research and development management", "research conference", "research methodology", "research methods",
+  "research project 2 of grand challenges of traceability", "research reporting", "research roadmap", "research software", "resolution", "resource management", "resource perspective", "responsibility",
+  "responsibility by design", "responsibility requirements", "responsible ai", "responsible gambling", "responsible software engineering", "responsive", "restful api", "result categorization",
+  "retrenchment", "retrieval augmented generation", "retrieval augmented generation (rag)", "retrofit", "retrospective", "retrospective case study analysis", "reusability", "reusable aspect models",
+  "reusable patterns", "reusable software", "reuse", "reuse framework", "reuse of information", "reutilización de requisitos", "reverse engineering", "reverse engineering for self-adaptive system",
+  "review", "review analytics", "review mining", "reviews", "revisão sistemática", "revisão sistemática da literatura", "revolution", "revs",
+  "revv-light", "rework", "reúso", "rgpd", "rif", "right", "rights", "rigour",
+  "risk", "risk analysis", "risk analysis and management methods", "risk and opportunity analysis", "risk appetite", "risk assessment", "risk control", "risk management",
+  "risk modelling", "risk perception", "risk prediction", "risk reduction", "risk-aware business process management", "risk-aware problem domain ontology", "risk-based approach", "risk-based modelling",
+  "risks", "risks requirements engineering", "rivers", "rnf", "rnn", "road accidents", "road mapping", "road vehicle electronics",
+  "roadmap", "roadmapping", "robotic systems", "robustness", "robustness diagrams", "robótica", "robótica socialmente assistiva", "robôs sociais",
+  "roi", "role activity diagrams", "role playing", "role-based access control", "role-playing", "role-playing workshop", "role-specific views", "roles",
+  "rollup", "round-trip prototyping", "routing", "rpl", "rsl-il4privacy", "rsml", "rt inconsistency", "rucm",
+  "rule classification", "rule modeling", "rule-based", "rule-based approach", "rule-based semantics", "rule-based traceability", "rules", "run-time",
+  "run-time monitoring", "run-time requirements", "run-time requirements engineering", "runtime", "runtime behavior", "runtime coordination", "runtime goal model", "runtime models",
+  "runtime monitoring", "runtime requirements", "runtime weights updating", "rup", "rural areas", "s-res", "saas", "sacm",
+  "safeness", "safenl", "safety", "safety analysis", "safety assessment", "safety assurance", "safety case", "safety cases",
+  "safety certification", "safety compliance", "safety critical", "safety critical systems", "safety engineering", "safety evidence", "safety functional requirements", "safety kernel",
+  "safety requirement", "safety requirement patterns", "safety requirements", "safety requirements classification", "safety requirements elicitation", "safety standards", "safety-critical", "safety-critical embedded systems",
+  "safety-critical software", "safety-critical system", "safety-critical systems", "safetycritical software", "samarium", "sat/smt/omt", "satisfaction analysis", "satisfaction argument",
+  "satisfaction arguments", "satisfactory", "satisfiability", "satisficing status", "satisfying", "scalability", "scenario", "scenario acting",
+  "scenario analysis", "scenario and model-based elicitation method", "scenario development", "scenario generation", "scenario management", "scenario modeling", "scenario modelling", "scenario models",
+  "scenario notations", "scenario patterns", "scenario planning", "scenario quality", "scenario schema", "scenario template", "scenario-based", "scenario-based requirements",
+  "scenario-based specification", "scenarios", "schedules", "schema clustering", "scholar@uc", "scientific artifacts", "scientific evaluation papers", "scientism",
+  "scope", "scope creep", "scopus", "score", "scram", "script", "scrum", "sdgs",
+  "sdl", "sdlc", "se education", "seam", "seamless", "search engines", "search logs", "search user interface",
+  "search-based", "search-based software engineering", "seco", "secondary measures", "secondary study", "secure by design · desenvolvimento orientado por comportamento", "secure code", "secure coding",
+  "secure design", "secure engineering", "secure software", "secure software development", "secure software development support", "secure software engineering", "security", "security and privacy breaches",
+  "security and privacy requirements", "security assurance", "security control standards", "security controls", "security controls catalogues", "security engineering", "security guidelines", "security management",
+  "security needs", "security patterns", "security policies", "security policy", "security quality requirements engineering (square) method", "security reference architecture", "security regulations", "security requirement",
+  "security requirement elicitation", "security requirement engineering", "security requirements", "security requirements elicitation", "security requirements engineering", "security requirements engineering method evaluation", "security requirements identification", "security requirements sources",
+  "security requirements user study", "security risk", "security risk assessment", "security risk assessment methods", "security robustness analysis", "security training", "security-and-privacy", "security-by-design",
+  "selección", "selection of technologies", "selenium webdriver", "self adaptation", "self adaptive", "self adaptive systems", "self adptivity", "self-adaptation",
+  "self-adaptive", "self-adaptive security", "self-adaptive software", "self-adaptive software reengineering", "self-adaptive system", "self-adaptive systems", "self-adaptive systems engineering", "self-assessment",
+  "self-elicitation", "self-explainability", "self-labeling algorithms", "self-organization", "self-repair", "self-triage", "self-tuning", "semantic analysis",
+  "semantic annotation", "semantic composition", "semantic conflicts identification", "semantic document", "semantic documentation", "semantic elements", "semantic frames", "semantic hierarchy",
+  "semantic interactions", "semantic interoperability", "semantic legal metadata", "semantic networks", "semantic parameterization", "semantic relation", "semantic representation", "semantic roles",
+  "semantic technologies", "semantic traceability", "semantic web", "semantic web technologies", "semantic wiki", "semantics", "semantics of modelling languages", "semi-structured interviews",
+  "semi-supervised learning", "semiotics", "semiotics inspection", "senior citizens", "seniordt", "seniors", "sensemaking", "sensitivity analysis",
+  "sensors", "sentence bert", "sentence patterns", "sentiment analysis", "sentire", "separation of concerns", "sequence based enumeration", "sequence diagram",
+  "sequence diagrams", "sequence labeling", "serious games", "service", "service based applications", "service bundling", "service composition", "service computing",
+  "service definition", "service design", "service interaction design", "service level agreement", "service level agreements", "service orientation", "service oriented architecture (soa)", "service requirements",
+  "service selection", "service systems", "service-based systems", "service-compositions", "service-oriented architecture", "service-oriented architecture (soa)", "service-oriented logical architecture", "services",
+  "set theory", "setor público", "shape", "shaping", "shared artifact", "shared states", "shared understanding", "sign",
+  "signal analysis", "similaridad semántica", "similarity", "similarity measures", "similarity/duplicate detection", "simulation", "simulation toolkit", "simulator",
+  "simulink", "sistemas aal", "sistemas aeroespaciais", "sistemas ciber-físicos", "sistemas críticos", "sistemas críticos de segurança", "sistemas de información interorganizacionales", "sistemas de informação",
+  "sistemas embarcados", "sistemas legados", "sistemas multi-agentes", "sistemas multiagentes", "sistemas web", "situated cognition", "situation awareness", "situation awareness requirements",
+  "situational awareness", "situational capability maturity", "situational contexts", "situational method engineering", "six sigma", "skeleton", "sketch recognition", "sketching",
+  "sla", "slr", "small and medium enterprises", "small businesses", "small uncrewed aerial systems", "small unmanned aerial systems", "small-scale projects", "small-sized software enterprises",
+  "small-sized software organization", "smart cities", "smart city", "smart contract", "smart contracts", "smart device", "smart devices", "smart ecosystem",
+  "smart grid security", "smart home", "smart homes", "smart re", "smart search", "smart sewer systems", "smart spaces", "smart water",
+  "smarthome", "smartphone", "smartphone app", "smartphone applications", "sme", "smell detection", "smes", "sms",
+  "snapshots", "snorkel", "snowballing", "soa", "soaml", "social aspects", "social band of human action", "social cloud",
+  "social clusters", "social commitments", "social computing", "social design", "social determinants", "social engagement", "social engineering attacks", "social goal models",
+  "social housing", "social interactions", "social isolation", "social issues", "social media", "social media analysis", "social media analytics", "social media for collaborative work systems",
+  "social network", "social network analysis", "social network services", "social networks", "social norms", "social psychology", "social requirements", "social requirements engineering",
+  "social sector requirement engineering", "social software engineering", "social sustainability", "social threats", "socially assistive robot", "socially oriented methodologies", "society", "socio cyber physical systems",
+  "socio technical barriers", "socio technical system", "socio-cyber-physical systems", "socio-political issues", "socio-technical", "socio-technical perspectives", "socio-technical system", "socio-technical systems",
+  "socio-technical syystems", "sociotechnical", "sociotechnical system", "sociotechnical systems", "soft goals", "soft requirements", "soft skills", "soft systems",
+  "soft systems methodology", "soft/hard systems thinking", "softgoal", "softgoals", "softgoals and hardgoal", "software", "software adaptability", "software agents",
+  "software analogy", "software analysis", "software analytics", "software and systems traceability", "software application", "software architect", "software architecture", "software architecture metrics",
+  "software architectures", "software as a service (saas)", "software audit model", "software change", "software changeability", "software compliance", "software compliance engineering", "software components",
+  "software configuration", "software customization", "software debugging", "software defects", "software design", "software design and architecture", "software design process", "software developers",
+  "software development", "software development environments", "software development industry", "software development managemen", "software development management", "software development methodologies", "software development outsourcing", "software development process",
+  "software development processes", "software documentation", "software economics", "software ecosystem", "software ecosystems", "software effort estimation", "software engineering", "software engineering contracts",
+  "software engineering tools", "software engiuerring", "software enhancement", "software evolution", "software fairness", "software fault tree", "software feature", "software feature mapping",
+  "software feature request detection", "software features", "software footprint", "software for aged care", "software game", "software industrial practices", "software industry", "software inspection",
+  "software inspections", "software integration", "software maintenance", "software maintenance and evolution", "software management", "software maturity model", "software methodology", "software model",
+  "software modeling", "software modularity", "software packages", "software performance", "software process", "software process improvement", "software process modeling", "software product",
+  "software product forum", "software product forums", "software product line", "software product line engineering", "software product lines", "software product management", "software products", "software professionals",
+  "software project", "software project artifacts", "software project size estimation", "software prototyping", "software psychology", "software qualities", "software quality", "software quality engineering",
+  "software quality model", "software refactoring", "software release planning", "software requirement", "software requirement pattern", "software requirement patterns", "software requirements", "software requirements allocation",
+  "software requirements analysis", "software requirements and specifications", "software requirements classification", "software requirements completeness", "software requirements documents", "software requirements generation", "software requirements relationships", "software requirements selection",
+  "software requirements specification", "software requirements specifications", "software reuse", "software safety", "software safety risk", "software security", "software security knowledge base", "software similarity",
+  "software sizing", "software specification", "software standards", "software startups", "software sustainability", "software system", "software system engineering", "software system testing",
+  "software systems", "software testing", "software tools", "software traceability", "software transparency", "software verification", "software verification and validation", "software vision",
+  "software visualization", "software vulnerability", "software web applications", "software-based feedback agents", "software-defined clouds", "software-defined networks", "software-development", "software-engineering",
+  "software-intensive system", "solids", "solution analysis", "solution concept", "solution design", "solution planning", "solutions", "source code changes",
+  "source code quality", "source of requirements", "sox", "space technology", "span", "spanish requirements", "sparks", "spatial planning",
+  "spatial requirements", "spec explorer", "special needs", "specification", "specification conversational requirements", "specification defects", "specification exchange", "specification language",
+  "specification languages", "specification model", "specification pattern systems", "specification quality", "specifications", "speculative design", "speculative requirements", "speech recognition",
+  "speech-to-text", "spem", "spin", "spiral of change model", "spirals", "spl", "spm", "spontaneous feedback",
+  "spring", "springs", "square", "srs", "stability", "stack overflow", "stake-holder motivation", "stakeholder",
+  "stakeholder analysis", "stakeholder and domain modeling", "stakeholder bias", "stakeholder communication", "stakeholder concerns", "stakeholder contribution pattern", "stakeholder discovery", "stakeholder identification",
+  "stakeholder involvement", "stakeholder motivation", "stakeholder needs", "stakeholder networks", "stakeholder participation", "stakeholder perspectives", "stakeholder preferences", "stakeholder requirements",
+  "stakeholder satisfaction", "stakeholder trade-offs", "stakeholders", "stakeholders and their preferences", "stakeholders modeling", "stakeholders' social network", "stakeholders' socio-technical interaction", "stamp",
+  "standard", "standardization", "standards", "standards development", "standards organizations", "standards publication", "startup", "startup ecosystem",
+  "startups", "startups de governo", "state extraction", "state machine", "state of practice", "state-based specification", "state-machine", "statechart derivation",
+  "statecharts", "states and modes", "static analysis", "stationarity", "statistical analysis", "statistics", "statutory interpretation", "std model",
+  "stigmergy", "stories", "story cloze test", "story map", "story points estimation", "story-point estimation", "storyboard", "storyboarding",
+  "storytelling", "stpa", "strategic decision-making", "strategic indicator", "strategic planning", "strategy", "stress control", "stride",
+  "strips", "strontium", "structural causal model", "structural similarity", "structural testing", "structuration", "structure", "structured analysis",
+  "structured approaches", "structured argumentation", "structured assurance case metamodel", "structured literature review", "structured natural language requirements", "structured tools", "structuring", "sts-ml",
+  "student experiments", "student participants", "studies", "study", "subdivisões autônomas", "subject-oriented modeling", "subjective assessment", "suborbital rocket",
+  "subsea", "successful ca development", "summarization", "super app design", "superintelligence safety", "supervised classification learning", "supplier", "supplier management",
+  "supplier monopoly", "supply chain", "supply chain risk management", "supply chains", "supply-chain network quality of service weakest link", "support", "support system", "support systems",
+  "support vector machine", "supporting mechanisms", "supporting tool", "surprise", "survey", "survivability", "survivability assurance", "susoftpro",
+  "sustainability", "sustainability awareness framework", "sustainability engineering", "sustainability profiling", "sustainability requirements", "sustainable development", "sustainable elearning systems", "sustainable software",
+  "sustentabilidade", "suíte de teste", "svms", "swarms", "switches", "switching systems", "switzerland", "swrl",
+  "symbiotic human–robot collaboration systems", "symboleo", "symbolic modeling", "synchronization", "synergies", "synonym detection", "synonyms", "syntactic",
+  "syntax", "synthesis", "syrs", "sysadl", "sysml", "sysml model", "sysml/kaos", "system",
+  "system analysis", "system analysis and design", "system and security co-engineering", "system architecture", "system assurance", "system assurance and certification", "system certification", "system complexity",
+  "system definition", "system dependability", "system design", "system design cyber physical systems explanation finite state machines systems of systems", "system development process modelling", "system dynamics", "system engineering", "system evolution",
+  "system failures", "system goals", "system information domain", "system model canvas", "system modeling", "system modeling language (sysml)", "system of systems", "system of systems architecture",
+  "system of systems engineering", "system performance", "system procurement", "system reliability", "system requirements", "system requirements specification", "system requirements specifications", "system security",
+  "system sequence diagram", "system specifications documents", "system states", "system testing", "system testing alignment", "system tests", "system usability", "system verification",
+  "system-level design", "system-of-systems", "systematic error", "systematic literature map", "systematic literature mapping", "systematic literature review", "systematic literature survey", "systematic mapping",
+  "systematic mapping review", "systematic mapping study", "systematic requirement engineering", "systematic reuse", "systematic review", "systemic concerns", "systems", "systems analysis",
+  "systems analysis and design", "systems architecture", "systems design", "systems development", "systems development economics", "systems development methodology", "systems engineering", "systems engineering and theory",
+  "systems engineering and theory-systems modeling language", "systems engineering design", "systems functional behaviors and non-functional properties", "systems modeling language (sysml)", "systems of engagements (soe)", "systems of systems", "systems of systems engineering", "systems projects",
+  "systems security", "systems simulation", "systems theory", "systems thinking", "systems traceability", "systems-of-systems", "t à", "t5",
+  "table lookup", "tablet", "tabular notations", "tabular specification", "tacit knowledge", "tagging tool", "tags", "tailorable information systems",
+  "tamaño funcional", "tara", "tarjetas crc", "task analysis", "task and support", "task annotation", "task description", "task interruptions",
+  "task switching", "tasm", "tax incentives", "taxonomia", "taxonomies", "taxonomy", "taxonomy of reactive testing", "taxonomías",
+  "tcpip", "teaching", "teaching and learning", "team learning", "team work", "teams", "tech transfer", "technical debt",
+  "technical debt (requirement debt)", "technical debt of requirements", "technical debt prevention", "technical debt repayment", "technical documents", "technical writing", "technique", "techniques",
+  "technological innovation", "technologies for privacy-aware software", "technology acceptance", "technology acceptance model", "technology and knowledge transfer", "technology management", "technology planning", "technology product management",
+  "technology selection", "technology transfer", "technology transfer model", "techs4events", "telecommunications", "telematic insurance", "telematics", "telemedicine requirements elicitation",
+  "telemonitoring", "teleoperated systems", "telephony", "tellurium", "template", "templates", "temporal logic", "temporal perspective",
+  "temporal requirements", "tender process", "tensor", "tensorflow", "teoria da atividade", "teoria dos conjuntos nebulosos", "term coreference", "term proximity",
+  "terminology", "terminology extraction", "tertiary study", "test case description", "test case generation", "test case validation", "test cases", "test cases generation",
+  "test coverage", "test derivation", "test engineering", "test management", "test model generation", "test oriented requirements engineering (tore)", "test scenario", "test scenarios",
+  "testers", "testing", "tests", "text", "text analysis", "text augmentation", "text classification", "text clustering",
+  "text deconstruction", "text embedding", "text embeddings", "text extraction", "text generation", "text mining", "text recognition", "text similarity",
+  "text-mining", "text-to-text generation", "text-to-text transfer transformer (t5)", "textmining", "textrank", "textual", "textual genre", "textual modeling",
+  "textual representation", "textual requirements", "textual template", "tf-idf", "the fourth industrial revolution", "the general data protection regulation (gdpr)", "the integration of early and late  requirements", "theme organization",
+  "theoretical replication", "theory", "theory formation", "theory of constructed emotions", "therapy", "third party inspection", "third-party requirements", "threat",
+  "threat analysis", "threat model", "threat modeling", "threat tree", "threat-driven risk assessment", "threats catalogues", "throughput", "throughput calculation",
+  "thyristors", "tiktok", "time", "time factors", "time modeling", "time patterns", "time series", "time series forecasting",
+  "time to market", "time-automata", "time-constrained requirements", "time-dependent value", "timed automata", "timed behavioral specifications", "timed use case maps (tucm)", "timing",
+  "timing analysis", "timing requirements", "tipo de", "token classification", "toma de decisión", "tool", "tool based analysis", "tool demo",
+  "tool development", "tool evaluation", "tool integration", "tool interoperability", "tool selection", "tool support", "tool use method", "tool-assisted task",
+  "tool-chain", "tooling", "tools", "top management support", "top-down", "topic", "topic landscape", "topic modeling",
+  "topsis", "topsy-turvy", "trace", "trace graph", "trace link visualization", "trace links", "trace matrix", "trace obligation",
+  "traceability", "traceability automation", "traceability effort and quality", "traceability evaluation tool", "traceability graphs", "traceability information model", "traceability information model (tim)", "traceability knowledge graph",
+  "traceability knowledge graph (tkg)", "traceability link", "traceability link recovery", "traceability links recovery", "traceability maintenance", "traceability management", "traceability modeling", "traceability pattern",
+  "traceability practice", "traceability problem", "traceability problem classes", "traceability process", "traceability strategy", "traceability strategy assessment", "traceability tool", "traceability usage goals",
+  "tracelab", "tracery", "tracing", "tracing link", "tracing model", "tracing strategies", "track", "tracking",
+  "tracks", "trade-off", "trade-off analysis", "trade-off solutions", "trade-offs", "tradeoffs", "trading", "traffic control",
+  "traffic signal timing", "training", "training material", "training plan", "training sets", "traning", "tranparência", "transcript analysis",
+  "transfer learning", "transformation", "transformation rules", "transformations", "transformação", "transformação digital", "transformações de modelos", "transformer models",
+  "transformer-based architectures", "transition rules", "transition system", "transition systems", "transparency", "transparency analysis", "transparency management", "transparency modelling",
+  "transparency requirements", "transparency stakeholders", "transparência", "transparência de processos", "transparência de processos de negócio", "transparência de software", "transport sector", "transportation management",
+  "traversal algorithm", "trazabilidad de requisitos", "trends", "triage", "triggers", "triple graph grammar", "tropos", "trr 318",
+  "truedepth camera", "trust", "trust and reputation requirements", "trust judgement", "trust requirements", "trusted bases", "trustworthiness", "trustworthy",
+  "trustworthy ai", "trustworthy service level agreement", "trustworthy voting systems", "tucker decomposition", "tutorial", "tutorials", "tweets", "twin peaks",
+  "twitter", "técnicas de procesamiento de lenguaje natural", "uav", "ubicomp", "ubiquitous computing", "ubiquitous grand challenge", "ubiquity", "ucg",
+  "ucm", "ufo", "uml", "uml activity diagram", "uml activity diagrams", "uml association class", "uml class diagram", "uml model",
+  "uml modeling", "uml modelling", "uml models", "uml object diagram", "uml profile", "uml profiles", "uml statemachines", "uml use case diagram",
+  "uml use cases", "umlsec", "unambiguity", "uncertainty", "uncertainty cues", "uncertainty management", "uncertainty modelling", "uncertainty scopes",
+  "uncrewed aerial systems", "understandability", "understanding requirements", "undesirable interactions", "unicase", "unified", "unified modeling language", "unknown requirements",
+  "unmanned aerial vehicles", "unmanned aircraft systems (uass)", "unmanned systems", "unsafe acts", "unstructured time", "urban traffic manoeuvres", "urml", "urn",
+  "usabilidade", "usability", "usability design", "usability evaluation", "usability features", "usability inspection", "usability patterns", "usability requirement",
+  "usability requirement engineering", "usability requirements", "usability usability engineering", "usable", "usable security", "usage analytics", "usage data", "usage mining",
+  "usage monitoring", "usage scenarios", "usarp", "usarp tool", "use  cases", "use case", "use case (uc) diagram", "use case construction",
+  "use case descriptions", "use case diagram", "use case diagrams", "use case maps", "use case model", "use case modeling", "use case modelling", "use case points",
+  "use case scenario", "use case specification", "use cases", "use cases and uml", "use scenarios", "useful transparency", "user", "user behavior",
+  "user behaviors mining", "user behaviour", "user centered design", "user comprehension", "user events", "user experience", "user experience design", "user experience design (uxd)",
+  "user feedback", "user feedback analysis", "user feedback embeddings", "user forum", "user interface", "user interface prototyping", "user interface requirements", "user interface specification",
+  "user interfaces", "user interviews", "user involvement", "user language", "user mon-itoring", "user needs", "user observation", "user participation",
+  "user perspective", "user preferences", "user profile", "user profiling", "user requirement", "user requirements", "user requirements analysis", "user requirements elicitation",
+  "user requirements notation", "user requirements notation (urn)", "user reviews", "user reviews feedback", "user scenarios", "user stories", "user story", "user story template",
+  "user story templates", "user study", "user support conversations", "user survey", "user view", "user-centered conceptual design", "user-centered design", "user-centered development process",
+  "user-centred design", "user-centred requirements engineering", "user-designer interaction", "users", "users feedback", "utility computing", "utility elicitation", "utility estimation",
+  "utility functions", "ux", "ux design", "v-model", "v-v", "v2i", "v2v", "vacuity",
+  "vagueness", "vagueness detection", "validación de escenarios", "validación de requerimientos", "validated learning", "validation", "validação", "validação de requisitos",
+  "valuation", "value", "value creation", "value modeling", "value-based planning", "value-based software engineering", "values", "values-driven requirements engineering",
+  "variabilidad de procesos", "variability", "variability analysis", "variability constraints", "variability design", "variability involving attributes", "variability management", "variability model",
+  "variability modeling", "variability modelling", "variability models", "variability requirements", "vbse", "vc", "vdm", "vehicle crash testing",
+  "vehicle dynamics", "vehicle safety", "vehicle-to-infrastructure", "vehicles", "velocity prediction", "venn diagrams", "venture capital", "verifiability",
+  "verificación", "verificación de requisitos", "verification", "verification & validation", "verification and validation", "verification of requirements", "verification of requirements ontology", "verificação de modelos de requisitos",
+  "version control", "version control system", "vhdl", "video", "video analysis", "video comment", "video game", "video game development",
+  "video platforms", "videogame", "videos", "view merging", "view-based development", "view-based requirements specification", "viewpoint", "viewpoint development",
+  "viewpoints", "vignettes", "virtual clinics", "virtual communities", "virtual community", "virtual environments", "virtual kanban board", "virtual organization",
+  "virtual prototypes", "virtual reality systems", "virtual stakeholders", "virtual worlds", "vision", "vision paper", "vision video", "vision videos",
+  "vision-building", "visual analytical reasoning", "visual analytics", "visual differencing", "visual exploration", "visual impairment", "visual language", "visual languages",
+  "visual model", "visual narrator", "visual notation", "visual notations", "visual perception", "visual rendering", "visual requirements", "visual storytelling",
+  "visual syntax", "visualisation", "visualization", "visualização", "visually impaired", "vivid scenarios", "vocabulary", "vocabulary base",
+  "voice", "volatility measure", "volere", "voluntary blink", "volunteer computing", "vote secrecy", "vote threats", "vote verification",
+  "voter", "voting", "voting service provider", "voting system", "vulnerabilities", "vulnerability", "vídeo sob demanda", "vínculos semánticos",
+  "waiting time", "want", "wap", "warehouse management system", "warehouse management systems", "warehouse operations", "watches", "water management",
+  "wcag guidelines", "weak words", "weakly supervised learning", "wearable computing", "weather forecasting", "web 2", "web accessibility", "web and mobile",
+  "web apis", "web application", "web applications", "web applications development", "web augmentation", "web based systems", "web design", "web development methods",
+  "web engineering", "web platform", "web requirements", "web service composition", "web services", "web systems", "web testing", "web tool",
+  "web usability", "web-based systems design practices", "web3", "webapp", "website services", "weighted sum method qos model", "weka", "well being",
+  "well-being", "well-being (wb)", "wellbeing", "wer", "werpapers", "wfmc", "when-to-release decisions", "wicked problem",
+  "wicked problems", "wide audience", "wiki", "winwin negotiation model", "wireless lan", "wireless network", "wizard of oz", "wizard-of-oz",
+  "wms", "word embedding", "word embeddings", "word sense disambiguation", "word2vec", "work design theory", "work environment", "work organisation",
+  "workflow", "workflow analysis", "workflow management", "workflow management system", "workflow management systems", "workflow modelling", "workflow nets", "workflow notation",
+  "workflow patterns", "workflow resource patterns", "workflow specification", "workflows for e-services", "workplace privacy", "workshop", "workshop organization", "workshop summary",
+  "workshop video", "workshop videos", "writing", "xai", "xero", "xmi", "xml", "xpdl",
+  "xslt", "yield estimation", "youtube", "zero-shot learning", "zooming", "zooniverse", "índice", "αsmol"
+]);
+
+    document.getElementById('csvFile').addEventListener('change', function (event) {
+      const file = event.target.files[0];
+      if (file) {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            csvData = results.data;
+            headers = results.meta.fields;
+            analyzeAndSummarize();
+          }
+        });
+      }
+    });
+
+    function analyzeAndSummarize() {
+      const numRows = csvData.length;
+      const colTypes = headers.map(header => analyzeColumn(csvData.map(row => row[header])));
+      const dispensableCols = headers.filter((_, i) => colTypes[i] === 'inválida');
+
+      let summaryHtml = `<p><strong>Títulos das colunas:</strong> ${headers.join(', ')}</p>`;
+      summaryHtml += `<p><strong>Número de linhas:</strong> ${numRows}</p>`;
+      summaryHtml += `<p><strong>Colunas numéricas:</strong> ${headers.filter((_, i) => colTypes[i] === 'numérica').join(', ')}</p>`;
+      summaryHtml += `<p><strong>Colunas categóricas:</strong> ${headers.filter((_, i) => colTypes[i] === 'categórica').join(', ')}</p>`;
+      summaryHtml += `<p><strong>Colunas descartáveis:</strong> ${dispensableCols.join(', ') || 'nenhuma'}</p>`;
+
+      document.getElementById('summary').innerHTML = summaryHtml;
+      document.getElementById('confirm').innerHTML = '<p>Deseja exibir o dashboard com os dados?</p>' +
+        '<button onclick="showDashboard()">Sim</button> ' +
+        '<button onclick="alert(\'Ok, dados não serão exibidos.\')">Não</button>';
+      populateDictColumnSelector();
+    }
+
+    function analyzeColumn(values) {
+      if (values.every(v => !v || v.trim() === '')) return 'inválida';
+      const nonEmpty = values.filter(v => v && v.trim() !== '');
+      const numericCount = nonEmpty.filter(v => !isNaN(parseFloat(v))).length;
+      const uniqueValues = new Set(nonEmpty);
+      if (numericCount === nonEmpty.length) return 'numérica';
+      if (uniqueValues.size < nonEmpty.length / 2) return 'categórica';
+      return 'inválida';
+    }
+
+    function populateDictColumnSelector() {
+      const select = document.getElementById('dictColumn');
+      select.innerHTML = '';
+      headers.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col;
+        option.textContent = col;
+        select.appendChild(option);
+      });
+    }
+
+    function extractWithDictionary() {
+      const column = document.getElementById('dictColumn').value;
+      const newCol = 'termos_encontrados';
+      if (!headers.includes(newCol)) headers.push(newCol);
+
+      csvData.forEach(row => {
+        const text = (row[column] || '').toLowerCase();
+        const found = Array.from(termDictionary).filter(term => text.includes(term));
+        row[newCol] = found.join(', ');
+      });
+
+      alert('Extração concluída. Coluna "termos_encontrados" adicionada.');
+      showDashboard();
+    }
+
+    function downloadUpdatedCSV() {
+      const csv = Papa.unparse(csvData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.setAttribute('href', URL.createObjectURL(blob));
+      link.setAttribute('download', 'referencias_termos.csv');
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function showDashboard() {
+      const container = document.getElementById('tableContainer');
+      container.classList.remove('hidden');
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+
+      headers.forEach((header, colIndex) => {
+        const th = document.createElement('th');
+        th.innerHTML = `${header} <span class="sort-indicator">&#x21C5;</span>`;
+        th.addEventListener('click', () => sortTable(colIndex));
+        headerRow.appendChild(th);
+      });
+
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      const maxRows = Math.min(csvData.length, 100);
+
+      for (let i = 0; i < maxRows; i++) {
+        const row = csvData[i];
+        const tr = document.createElement('tr');
+        headers.forEach(header => {
+          const td = document.createElement('td');
+          td.textContent = row[header];
+          td.title = row[header];
+          td.classList.add('resizable');
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(tbody);
+      container.innerHTML = '';
+      container.appendChild(table);
+      showCategoryChartOptions();
+    }
+
+    function sortTable(colIndex) {
+      const key = headers[colIndex];
+      const direction = sortDirection[key] === 'asc' ? 'desc' : 'asc';
+      sortDirection[key] = direction;
+      csvData.sort((a, b) => {
+        const valA = a[key] || '';
+        const valB = b[key] || '';
+        return direction === 'asc'
+          ? valA.localeCompare(valB, undefined, { numeric: true })
+          : valB.localeCompare(valA, undefined, { numeric: true });
+      });
+      showDashboard();
+    }
+
+    function showCategoryChartOptions() {
+      const categoricalCols = headers.filter(header => {
+        const values = csvData.map(row => row[header]);
+        return analyzeColumn(values) === 'categórica';
+      });
+
+      if (categoricalCols.length === 0) return;
+
+      const select = document.getElementById('categorySelect');
+      select.innerHTML = '';
+      categoricalCols.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col;
+        option.textContent = col;
+        select.appendChild(option);
+      });
+
+      document.getElementById('chartControls').classList.remove('hidden');
+      select.addEventListener('change', () => renderBarChart(select.value));
+      renderBarChart(select.value);
+    }
+
+    function renderBarChart(column) {
+      const counts = {};
+      csvData.forEach(row => {
+        const val = row[column] || '(vazio)';
+        counts[val] = (counts[val] || 0) + 1;
+      });
+
+      const labels = Object.keys(counts);
+      const data = Object.values(counts);
+
+      if (window.barChartInstance) window.barChartInstance.destroy();
+
+      const ctx = document.getElementById('barChart').getContext('2d');
+      window.barChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: `Distribuição de '${column}'`,
+            data: data,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: { enabled: true } },
+          scales: {
+            x: { ticks: { maxRotation: 90, minRotation: 45 } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
