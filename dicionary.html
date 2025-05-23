@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gerador de Dicionário de Termos</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { color: #333; }
+    label, select, button { margin-top: 10px; display: block; }
+    table { border-collapse: collapse; margin-top: 20px; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h2>Gerador de Dicionário de Termos</h2>
+  <input type="file" id="csvFile" accept=".csv">
+  <div id="columnSelection"></div>
+  <div id="output"></div>
+  <button id="downloadBtn" style="display:none">Download CSV</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    let csvData = [], headers = [], termStats = [];
+
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+      Papa.parse(e.target.files[0], {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          csvData = results.data;
+          headers = results.meta.fields;
+          showColumnSelector();
+        }
+      });
+    });
+
+    function showColumnSelector() {
+      const div = document.getElementById('columnSelection');
+      div.innerHTML = '<label for="column">Escolha a coluna de termos:</label>';
+      const select = document.createElement('select');
+      select.id = 'termColumn';
+      headers.forEach(col => {
+        const option = document.createElement('option');
+        option.value = col;
+        option.textContent = col;
+        select.appendChild(option);
+      });
+      const btn = document.createElement('button');
+      btn.textContent = 'Gerar Dicionário';
+      btn.onclick = () => {
+        const col = select.value;
+        const total = csvData.length;
+        const vazios = csvData.filter(row => !row[col] || row[col].trim() === '').length;
+        const stats = document.createElement('p');
+        stats.innerHTML = `Coluna <strong>"${col}"</strong> selecionada. Total de registros: <strong>${total}</strong>. Vazios: <strong>${vazios}</strong>.`;
+        div.appendChild(stats);
+        generateDictionary();
+      };
+      div.appendChild(select);
+      div.appendChild(btn);
+    }
+
+    function normalizeAndSplitTerms(text) {
+      text = (text || '').toLowerCase();
+      let separator = text.includes(';') ? ';' : ',';
+      let terms = text.split(separator).map(term => term.trim());
+      let processed = [];
+
+      terms.forEach(term => {
+        let parenthesized = [...term.matchAll(/\((.*?)\)/g)].map(m => m[1]).filter(Boolean);
+        processed.push(...parenthesized);
+        term = term.replace(/\(.*?\)/g, '').trim();
+        term = term.replace(/^[\s\d\W]+|[\s\d\W]+$/g, '');
+        if (term) processed.push(term);
+      });
+
+      return processed.filter(t => t.length > 1);
+    }
+
+    function detectLang(term) {
+      if (/[ãõç]/.test(term)) return 'Portuguese';
+      if (/[ñáéíóúü]/.test(term)) return 'Spanish';
+      return 'English';
+    }
+
+    function generateDictionary() {
+      const col = document.getElementById('termColumn').value;
+      const allTerms = {};
+
+      csvData.forEach(row => {
+        let terms = normalizeAndSplitTerms(row[col]);
+        terms.forEach(term => {
+          if (!allTerms[term]) allTerms[term] = 0;
+          allTerms[term]++;
+        });
+      });
+
+      termStats = Object.keys(allTerms).sort().map(term => {
+        return { keywords: term, ocurrencies: allTerms[term], language: detectLang(term) };
+      });
+
+      displayResults();
+    }
+
+    function displayResults() {
+      const div = document.getElementById('output');
+      div.innerHTML = '<h3>Primeiros termos extraídos:</h3>';
+      const table = document.createElement('table');
+      table.innerHTML = '<tr><th>Keyword</th><th>Ocorrências</th><th>Idioma</th></tr>' +
+        termStats.slice(0, 20).map(row =>
+          `<tr><td>${row.keywords}</td><td>${row.ocurrencies}</td><td>${row.language}</td></tr>`
+        ).join('');
+      div.appendChild(table);
+      document.getElementById('downloadBtn').style.display = 'inline';
+
+      const summary = document.createElement('p');
+      const total = termStats.length;
+      const byLang = termStats.reduce((acc, row) => {
+        acc[row.language] = (acc[row.language] || 0) + 1;
+        return acc;
+      }, {});
+      summary.innerHTML = `<strong>${total}</strong> termos únicos identificados. ` +
+        Object.entries(byLang).map(([lang, count]) => `${lang}: ${count}`).join(', ') + '.';
+      div.appendChild(summary);
+    }
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      const csv = Papa.unparse(termStats);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.setAttribute('href', URL.createObjectURL(blob));
+      link.setAttribute('download', 'dicionario_termos.csv');
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  </script>
+</body>
+</html>
